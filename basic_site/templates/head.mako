@@ -6,13 +6,20 @@
 </HEAD>
 <DIV id="head">
     <IMG src="files/logo.png">
-    <FORM action='' method="POST">
+    <DIV id="login">
+  % if uid == None:
+      <FORM action='' method="POST">
         Login:
         <LABEL target="user">User</LABEL>
         <INPUT type="text" name="user"> 
         <LABEL target="passwd">Password</LABEL>
         <INPUT type="password" name="passwd">
-    </FORM>
+      </FORM>
+  % else:
+      Logged in as <STRONG>${uid}</STRONG> 
+      (<A href="${request.application_url}/logout">logout</A>)
+  % endif
+    </DIV>
 </DIV>
 
 <%
