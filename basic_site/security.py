@@ -1,94 +1,55 @@
 import datetime
 
-from models import UserSession, User
+from models import DBSession, User
+from pyramid.security import remember
+from pyramid.url import route_url
 
-class Auth:
-    session_expire = datetime.timedelta(hours=2)
-    def __init__(self, request):
-        self.error = None
-        self.user = None
-        self.session = None
-        self.ip = None
+import sqlalchemy.orm
 
-        if 'HTTP_COOKIE' in env: 
-            try:
-                cookie = request.cookie
-            except:
-                cookie = None
-        else:
-            cookie = None
-        
-        if cookie:
-            sessionkey = cookie.get('session').value
-        else:
-            sessionkey = None
-       
-        ip = env.get('REMOTE_ADDR', 0)
-        if ip:
-            try:
-                ip = ip.split('.')
-                ip = map(int, ip)
-                ip = ip[0] << 24 + ip[1] << 16 + ip[2] << 8 + ip[3]
-            except:
-                ip = 0
-       
-        if ip == 0:
-            return
 
-        if sessionkey:
-            q = session.query(UserSession)\
-                       .filter(UserSession.id == sessionkey)\
-                       .filter(UserSession.ip == ip)\
-                       .filter(UserSession.last_used >
-                               (now - self.session_expire))
-            try:
-                user_sess = q.one()
-            except:
-                # Couldn't find a matching session
-                sessionkey = None     
+def groupfinder(uid, request):
+    """There are only two groups: 'editor' and 'admin'. The only difference
+       is that only administrators can add users and edit certain files
+       (like the logo and custom.css)."""
+    if not uid:
+        return None
+    session = DBSession()
+    try:
+        user = session.query(User)\
+                      .filter(User.uid == uid)\
+                      .one()
+    except sqlalchemy.orm.exc.NoResultFound:
+        return None
+    
+    groups = ['group:editors']
+    if user.admin:
+        groups.append('group:admin')
+    return groups
+    
 
-        # If they don't have a session key already, make them one. 
-        if not sessionkey:
-            user_sess = UserSession(ip)
-            session.add(user_sess)
-            self.ip = ip
-            self.session = user_sess.id
-            request.response.set_cookie('session', self.session)
-            return
+def login(request):
+    """Returns a tuple of (authenticated) uid, and a message string.
+    If the user could not be authenticated (or they didn't try), the uid
+    will be None. If the user successfully logged in, sets a session
+    cookie for this session."""
 
-        q = session.query(UserSession)
-        q.filter(UserSession.last_used < (now - self.session_expire))
-        q.delete()
+    user = authenticated_userid(request)
+    if user:
+        return user, None
 
-        # At this point, we should have a user_sess object and a 
-        # session key. Now we'll check to see if the session key is logged in,
-        # or if the user is trying to log in.
-        request.response.set_cookie('session', self.session)
-        self.session = sessionkey
-        self.ip = ip
-        user_sess.last_used = now
-        session.commit()
-        if user_sess.user:
-            # Already logged in
-            self.user = user_sess.user
-            return
-
-        # If they aren't trying to log in, we're done.
-        if 'user' not in form or 'passwd' not in form:
-            return
-
-        uid = form.get_first('user')
-        passwd = form.get_first('passwd')
+    if 'user' in request.params and 'passwd' in request.params:
+        uid = request.params['user']
+        passwd = request.params['passwd']
         try:
-            user = session.query(User).filter(User.uid = uid).one()
+            user = session.query(User).filter(User.uid == uid).one()
         except:
-            self.error = "No such user: %s" % uid
-            return
+            return None, "Invalid user or password."
 
         if user.check_pw(passwd):
-            self.user = uid
+            headers = remember(request, uid)
+            request.response.headerlist.extend(headers)
+            return uid, "Logged in Successfully"
         else:
-            self.error = "Invalid Password"
-
-    def logged_in(self):
-        return self.user is not None
+            return None, "Invalid user or password."
+    else:
+        return None, None

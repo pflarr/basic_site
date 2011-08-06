@@ -7,6 +7,7 @@ setup.cfg
 setup.py
 basic_site/__init__.py
 basic_site/models.py
+basic_site/security.py
 basic_site/tests.py
 basic_site/views.py
 basic_site.egg-info/PKG-INFO
@@ -26,4 +27,8 @@ basic_site/static/pylons.css
 basic_site/static/pyramid-small.png
 basic_site/static/pyramid.png
 basic_site/static/transparent.gif
-basic_site/templates/mytemplate.pt
+basic_site/templates/edit.mako
+basic_site/templates/foot.mako
+basic_site/templates/head.mako
+basic_site/templates/news.mako
+basic_site/templates/page.mako

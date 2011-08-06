@@ -2,18 +2,33 @@ from pyramid.config import Configurator
 from pyramid.session import UnencryptedCookieSessionFactoryConfig
 from sqlalchemy import engine_from_config
 
-from basic_site.models import initialize_sql
+from pyramid.authentication import AuthTktAuthenticationPolicy
+from pyramid.authorization import ACLAuthorizationPolicy
+from basic_site.security import groupfinder
+
+from basic_site.models import initialize_sql, RootFactory
 
 def main(global_config, **settings):
     """ This function returns a Pyramid WSGI application.
     """
     engine = engine_from_config(settings, 'sqlalchemy.')
     initialize_sql(engine)
-    session_factory = UnencryptedCookieSessionFactoryConfig()
-    config = Configurator(settings=settings, session_factory=session_factory)
+    session_factory = UnencryptedCookieSessionFactoryConfig(
+                                                    settings['sess_secret'])
+    authn_policy = AuthTktAuthenticationPolicy(settings['auth_secret'],
+                                               callback=groupfinder,
+                                               include_ip=True,
+                                               timeout=60*60*1,
+                                               reissue_time=60*6)
+    authz_policy = ACLAuthorizationPolicy()
+    config = Configurator(settings=settings, 
+                          session_factory=session_factory,
+                          root_factory=RootFactory,
+                          authentication_policy=authn_policy,
+                          authorization_policy=authz_policy)
     config.add_static_view('static', 'basic_site:static')
-    config.add_route('Main', '/')
-    config.add_view('basic_site.views.Main',
+    config.add_route('home', '/')
+    config.add_view('basic_site.views.home',
                     route_name='home',
                     renderer='templates/main.mako')
     return config.make_wsgi_app()

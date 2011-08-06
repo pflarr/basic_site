@@ -8,6 +8,8 @@ from zope.sqlalchemy import ZopeTransactionExtension
 from z3c.bcrypt import BcryptPasswordManager
 manager = BcryptPasswordManager()
 
+from pyramid.security import Allow, Everyone
+
 import sqlalchemy.orm
 
 DBSession = scoped_session(sessionmaker(extension=ZopeTransactionExtension()))
@@ -18,15 +20,24 @@ def initialize_sql(engine):
     Base.metadata.bind = engine
     Base.metadata.create_all(engine)
 
+class RootFactory(object):
+    __acl__ = [ (Allow, Everyone, 'view'),
+                (Allow, 'group:editors', 'edit'),
+                (Allow, 'group:admin', 'admin') ]
+    def __init__(self, request):
+        pass
+
 class User(Base):
     __tablename__ = 'Users'
     uid = Column(String(10), primary_key=True)
-    pw_hash = Column(String())
-    fullname = Column(String())
+    pw_hash = Column(String(), nullable=False)
+    admin = Column(Boolean(), nullable=False)
+    fullname = Column(String(), nullable=False)
     
-    def __init__(self, name, pw, fullname):
+    def __init__(self, name, pw, admin, fullname):
         self.uid = name[:10]
         self.pw_hash = manager.encodePassword(pw)
+        self.admin = admin 
         self.fullname = fullname
 
     def check_pw(self, passwd):
@@ -41,21 +52,6 @@ class User(Base):
         else:
             return False
 
-class UserSession(Base):
-    __tablename__ = 'Sessions'
-    id = Column(String(), primary_key=True)
-    last_used = Column(DateTime(), nullable=False)
-    ip = Column(Integer(), nullable=False)
-    user = Column(String(10), ForeignKey(User.uid))
-
-    def __init__(self, ip):
-        now = datetime.datetime.utcnow()
-        md5 = hashlib.md5(ip)
-        md5.update(randome.randint(1,0xffffffff))
-        self.id = md5.hexdigest()
-        self.last_used = now
-        self.ip = ip
-
 class Post(Base):
     __tablename__ = 'Post'
     id = Column(Integer(), primary_key=True)
@@ -64,7 +60,7 @@ class Post(Base):
     sticky = Column(Boolean(), nullable=False)
     contents = Column(String(), nullable=False)
     
-    def __init__(self, creator, title, contents, sticky=False):
+    def __init__(self, creator, title, contents, sticky=False, created=None):
         if created:
             self.created = created
         else:
@@ -74,23 +70,26 @@ class Post(Base):
         self.title = title[:30]
         self.contents = contents
 
-    def edit(self, user, new_title, new_content):
+    def edit(self, title, content, sticky, user):
         """Edit this post, and record the change in the history."""
         session = DBSession()
         hist = Post_History(user, self) 
-        self.title = new_title[:30]
-        self.content = new_content
+        self.title = title[:30]
+        self.content = content
+        self.sticky = sticky
         session.add(hist)
 
 class Post_History(Base):
+    __tablename__ = 'post_history'
+    hist_id = Column(Integer(), primary_key=True)
     id = Column(Integer(), nullable=False)
+    changed_on = Column(DateTime(), nullable=False)
+    changed_by = Column(String(10), ForeignKey(User.uid), nullable=False)
     created = Column(DateTime(), nullable=False)
     creator = Column(String(10), nullable=False)
     sticky = Column(Boolean(), nullable=False)
     title = Column(String(30), nullable=False)
     contents = Column(String(), nullable=False)
-    changed_by = Column(String(10), ForiegnKey(Users.uid), nullable=False)
-    changed_on = Column(DateTime(), nullable=False)
 
     def __init__(self, editor_uid, post):
         for col in post.__table__.c:
@@ -103,7 +102,7 @@ class Post_History(Base):
         session = DBSession()
         try:
             post = session.query(Post)\
-                          .filter(Post.id = self.id)\
+                          .filter(Post.id == self.id)\
                           .one()
             post.edit(user, self.title, self.content)
         except sqlalchemy.orm.exc.NoResultFound:
@@ -114,7 +113,8 @@ class Post_History(Base):
  
 class Page(Base):
     __tablename__ = 'Page'
-    name = Column(String(15), primary_key=True)
+    id = Column(Integer(), primary_key=True)
+    name = Column(String(15), unique=True)
     created = Column(DateTime(), nullable=False)
     creator = Column(String(10), nullable=False)
     contents = Column(String(), nullable=False)
@@ -137,12 +137,15 @@ class Page(Base):
         session.add(hist)
 
 class Page_History(Base):
+    __tablename__ = 'page_history'
+    hist_id = Column(Integer(), primary_key=True)
+    id = Column(Integer(), nullable=False)
     name = Column(String(15), nullable=False)
+    changed_on = Column(DateTime(), nullable=False)
+    changed_by = Column(String(10), ForeignKey(User.uid), nullable=False)
     created = Column(DateTime(), nullable=False)
     creator = Column(String(10), nullable=False)
     contents = Column(String(), nullable=False)
-    changed_by = Column(String(10), ForiegnKey(Users.uid), nullable=False)
-    changed_on = Column(DateTime(), nullable=False)
 
     def __init__(self, editor_uid, page):
         for col in page.__table__.c:
@@ -155,7 +158,7 @@ class Page_History(Base):
         session = DBSession()
         try:
             page = session.query(Page)\
-                          .filter(Page.id = self.id)\
+                          .filter(Page.id == self.id)\
                           .one()
             page.edit(self.content, user)
         except sqlalchemy.orm.exc.NoResultFound:
