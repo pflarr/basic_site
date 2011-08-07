@@ -33,9 +33,14 @@ class User(Base):
     pw_hash = Column(String(), nullable=False)
     admin = Column(Boolean(), nullable=False)
     fullname = Column(String(), nullable=False)
+
+    UID_CHARS = 'abcdefghijklmnopqrstuvwxyz1234567890_-'
     
-    def __init__(self, name, pw, admin, fullname):
-        self.uid = name[:10]
+    def __init__(self, uid, pw, admin, fullname):
+        if len(uid) > 10 or \
+           all(c.lower() not in self.UID_CHARS for c in uid):
+            raise ValueError("Invalid User name: %s")
+        self.uid = uid
         self.pw_hash = manager.encodePassword(pw)
         self.admin = admin 
         self.fullname = fullname
@@ -43,14 +48,10 @@ class User(Base):
     def check_pw(self, passwd):
         return manager.checkPassword(self.pw_hash, passwd)
 
-    def change_pw(self, old, new):
+    def change_pw(self, new):
         """Verifies the old pw before changing it to new. Returns True if
     successful."""
-        if manager.checkPassword(self.pw_hash, old):
-            self.pw_hash = manager.encodePassword(pw)
-            return True
-        else:
-            return False
+        self.pw_hash = manager.encodePassword(pw)
 
 class Post(Base):
     __tablename__ = 'Post'
@@ -118,22 +119,25 @@ class Page(Base):
     created = Column(DateTime(), nullable=False)
     creator = Column(String(10), nullable=False)
     contents = Column(String(), nullable=False)
-    
+
+    allowed_chars = ['abcdefghijklmnopqrstuvwxyz0123456789 _-'] 
     def __init__(self, creator, name, contents, created=None):
         if created:
             self.created = created
         else:
             self.created = datetime.datetime.utcnow()
-        self.name = name[:15]
+
+        self.name = ''.join([c if c.lower() in self.allowed_chars else '_'
+                               for c in name[:15]])
         self.creator = creator
         self.contents = contents
 
-    def edit(self, new_name, new_content, user):
+    def edit(self, name, content, user):
         """Edit this post, and record the change in the history."""
         session = DBSession()
         hist = Page_History(user, self) 
-        self.name = new_name
-        self.content = new_content
+        self.name = name
+        self.content = content
         session.add(hist)
 
 class Page_History(Base):

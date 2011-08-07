@@ -37,3 +37,9 @@
     <LI><A href="page.cgi?page=${page.name|u}" ${cur_class(page.name)}>${page.name}</A>
   % endfor
 </DIV>
+
+% if 'message' in request.params:
+  <DIV class="message">${request.params['message']|h}</DIV>
+% elif message:
+  <DIV class="message">${message|h}</DIV>
+% endif

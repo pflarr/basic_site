@@ -121,114 +121,103 @@ def get_required_params(params, args=[], kwargs=[]):
         out_kw[p] = params.getone()
     return out_args, out_kw
 
-def submit_post(request):
+def submit_content(request):
+    """Handles page/post editing, adding, and restoration. The process is 
+almost identical for pages and posts, so it's a unified view callable. It 
+expects a 'ptypes' matchdict entry so that it can tell the difference 
+though. """
     session = DBSession()
+    uid, login_msg = login(request)
+    context = {'uid': uid, 
+               'login_msg': login_msg}
+
+    ptype = request.matchdict['ptype']
+    if ptype == 'page':
+        table = Page
+        hist_table = Page_History
+        fields = ['title', 'content']
+    else:
+        table = Post
+        hist_table = Post_History
+        fields = ['name', 'content']
+    
+    args,_ = get_requested_params(request.params, fields) 
+    if ptype == 'post':
+        args.append( request.params.has_key('sticky') )
+
+    if 'restore' in request.params:
+        id = request.params.getone('id')
+        hist_id = request.params.getone('restore')
+        entry = session.query(table).get(id)
+        if entry:
+            # The post still exists, just updated it.
+            args.append(uid)
+            entry.edit(*args)
+        else:
+            # The post was deleted, make a new one and update the history
+            # of the old one to point here.
+            hist = session.query(hist_table).get(hist_id)
+            if not hist:
+                raise NotFound("Failure restoring %s(hist_id): %d" % \
+                               (ptype, hist_id))
+            
+            args = [uid] + args + [hist.created]
+            entry = table(*args)
+            session.add(entry)
+            session.query(hist_table)\
+                   .filter(hist_table.id == id)\
+                   .update({'id':entry.id})
+        context['message'] = '%s restored succesfully.' % ptype.capitalize()
+ 
+    elif 'id' in request.params:
+        # Handle the editing of existing posts.
+        id = request.params.getone()
+        entry = session.query(table).get()
+        if not entry:
+            raise NotFound("No such %s to edit: %d" % (ptype, id))
+
+        args.append(uid)
+        entry.edit(*args)
+    except:
+        context['message'] = '%s edited succesfully.' % ptype.capitalize()
+    else:
+        args = [uid] + args
+        entry = table(*args)
+        session.add(entry)
+        context['message'] = '%s added successfully.' % ptype.capitalize()
+        
+    session.flush()
+    if ptype == 'post':
+        context['page_name'] = 'View Post'
+        context['page_subtitle'] = ''
+        context['posts'] = [entry]
+    else:
+        context['page'] = entry
+        context['page_name'] = entry.name
+        context['page_subtitle'] = '- %s' % entry.name
+    return context
+
+def delete(request):
+    session = DBSession()
+
     uid, login_msg = login(request)
     context = {'uid': uid, 
                'login_msg': login_msg}
     
-    args,_ = get_requested_params(request.params, ['title', 'content']) 
-    args.append( request.params.has_key('sticky') )
-
-    if 'restore' in request.params:
-        id = request.params.getone('id')
-        hist_id = request.params.getone('restore')
-        post = session.query(Post).get(id)
-        if post:
-            # The post still exists, just updated it.
-            args.append(uid)
-            post.edit(*args)
-        else:
-            # The post was deleted, make a new one and update the history
-            # of the old one to point here.
-            hist = session.query(Post_History).get(hist_id)
-            if not hist:
-                raise NotFound("Failure restoring post(hist_id): %d" % hist_id)
-            
-            args = [uid] + args + [hist.created]
-            post = Post(*args)
-            session.add(post)
-            session.query(Post_History)\
-                   .filter(Post_History.id == id)\
-                   .update({'id':post.id})
-        context['message'] = 'Post restored succesfully.'
- 
-    elif 'id' in request.params:
-        # Handle the editing of existing posts.
-        id = request.params.getone()
-        post = session.query(Post).get()
-        if not post:
-            raise NotFound("No such post to edit: %d" % id)
-
-        args.append(uid)
-        post.edit(*args)
-    except:
-        context['message'] = 'Post edited succesfully.'
+    ptype = request.matchdict['ptype']
+    if ptype == 'post':
+        table = Post
+        hist_table = Post_History
     else:
-        args = [uid] + args
-        post = Post(*args)
-        session.add(post)
-        context['message'] = 'Post added successfully.'
-        
-    session.flush()
-    context['page_name'] = 'View Post'
-    context['page_subtitle'] = ''
-    context['posts'] = [post]
-    return context
+        table = Page
+        hist_table = Page_History
 
-def submit_page(request):
-    """Create, edit, and restore submitted pages."""
-    session = DBSession()
-    uid, login_msg = login(request)
-    context = {'uid': uid, 
-               'login_msg': login_msg}
-   
-    args,_ = get_requested_params(request.params, ['name', 'content'])
+    entry = session.query(table).get(request.matchdict['id'])
+    title = entry.title if ptype == 'post' else entry.name
+    hist = hist_table(entry)
+    session.delete(entry)
 
-    if 'restore' in request.params:
-        id = request.params.getone('id')
-        hist_id = request.params.getone('restore')
-        post = session.query(Post).get(id)
-        if post:
-            # The post still exists, just updated it.
-            args.append(uid)
-            post.edit(*args)
-        else:
-            # The post was deleted, make a new one and update the history
-            # of the old one to point here.
-            hist = session.query(Post_History).get(hist_id)
-            if not hist:
-                raise NotFound("Failure restoring post(hist_id): %d" % hist_id)
-            
-            args = [uid] + args + [hist.created]
-            post = Post(*args)
-            session.add(post)
-            session.query(Post_History)\
-                   .filter(Post_History.id == id)\
-                   .update({'id':post.id})
-        context['message'] = 'Post restored succesfully.'
- 
-    elif 'id' in request.params:
-        # Handle the editing of existing posts.
-        id = request.params.getone()
-        post = session.query(Post).get()
-        if not post:
-            raise NotFound("No such post to edit: %d" % id)
-
-        args.append(uid)
-        post.edit(*args)
-    except:
-        context['message'] = 'Post edited succesfully.'
-    else:
-        args = [uid] + args
-        post = Post(*args)
-        session.add(post)
-        context['message'] = 'Post added successfully.'
-        
-    session.flush()
-    context['page_name'] = 'View Post'
-    context['page_subtitle'] = ''
-    context['posts'] = [post]
+    context['message'] = "Deleted %s: %s" % (ptype, title) 
     return context
 
 def history(request):
@@ -264,8 +253,97 @@ def history(request):
 
     return context
 
+def users(request):
+    """Give a list of users."""
 
+    session = DBSession()
+
+    uid, login_msg = login(request)
+    context = {'uid': uid, 
+               'login_msg': login_msg,
+               'current_user': session.query(Users).get(uid) }
+
+    context['users'] = session.query(User).order_by(User.uid).all()
+    return context
+
+def mod_users(request):
+    """This view handles adding, deleting, and editing users."""
+    
+    session = DBSession()
+
+    uid, login_msg = login(request)
+    context = {'uid': uid, 
+               'login_msg': login_msg}
+
+    action = request.matchdict['action']
+
+    if action == 'add':
+        n_uid = request.POST.getone('uid')
+        passwd = request.POST.getone('passwd')
+        repeat = request.POST.getone('repeat')
+        fullname = request.POST.getone('fullname')
+        admin = 'admin' in request.POST
+        if session.query(User).get(n_uid):
+            message = 'User %s already exists.' % n_uid
+        else:
+            try:
+                if passwd != repeat:
+                    raise ValueError("Passwords do not match.")
+                user = User(n_uid, passwd, admin, fullname)
+                session.add(user)
+                message = "Added user %s" % user.uid)
+            except ValueError, msg:
+                message = str(msg)
+    else: 
+        e_uid = request.matchdict['uid']
+        user = session.query(User).get(e_uid)
+        if not user:
+            message = "User %s does not exist." % e_uid
+        elif action == 'delete':
+            if uid == 'admin':
+                message = "Cannot delete the admin user."
+            else:
+                session.delete(user)
+                message = "User %s deleted." % e_uid
+        elif action == 'toggle_admin':
+            user.admin = not user.admin
+            session.flush()
+            message = "User %s admin priviliges %s" %\
+                            (e_uid, 'granted' if user.admin else 'revoked')
+
+    request.GET['message'] = message
+    return HTTPFound(location=request.route_url('users'), 
+                     headers=request.headers)
+
+def change_pw(request):
+    session = DBSession()
+
+    uid, login_msg = login(request)
+    context = {'uid': uid, 
+               'login_msg': login_msg}
+    
+
+    c_uid = request.matchdict['c_uid']
+    user = session.query(User).get(c_uid)
+    if user:
+        old = request.POST.getone('old')
+        new = request.POST.getone('new')
+        repeat = request.POST.getone('repeat')
+        if not user.check_pw(old):
+            message = "Invalid password."
+        elif new != repeat:
+            message = "Passwords do not match." 
+        else:
+            user.change_pw(new)
+            message = "Password changed"
+    else:
+         message = "No such user."
+
+    request.GET['message'] = message
+    return HTTPFound(location=request.route_url('users'), 
+                     headers=request.headers)
 
 def logout(request):
     headers = forget(request)
-    return HTTPFound(location=route_url('home', request), headers=headers)
+    return HTTPFound(location=request.route_url('home'), 
+                     headers=reqeust.headers)
