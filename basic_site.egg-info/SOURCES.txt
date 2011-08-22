@@ -32,3 +32,4 @@ basic_site/templates/foot.mako
 basic_site/templates/head.mako
 basic_site/templates/news.mako
 basic_site/templates/page.mako
+basic_site/templates/users.mako

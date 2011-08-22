@@ -2,6 +2,7 @@ import datetime
 
 from models import DBSession, User
 from pyramid.security import remember
+from pyramid.security import authenticated_userid
 from pyramid.url import route_url
 
 import sqlalchemy.orm
@@ -32,23 +33,24 @@ def login(request):
     If the user could not be authenticated (or they didn't try), the uid
     will be None. If the user successfully logged in, sets a session
     cookie for this session."""
+    
+    session = DBSession()
 
-    user = authenticated_userid(request)
-    if user:
-        return user, None
+    uid = authenticated_userid(request)
+    if uid:
+        return session.query(User).get(uid), None
 
     if 'user' in request.params and 'passwd' in request.params:
         uid = request.params['user']
         passwd = request.params['passwd']
-        try:
-            user = session.query(User).filter(User.uid == uid).one()
-        except:
+        user = session.query(User).get(uid)
+        if not user:
             return None, "Invalid user or password."
 
         if user.check_pw(passwd):
             headers = remember(request, uid)
             request.response.headerlist.extend(headers)
-            return uid, "Logged in Successfully"
+            return user, "Logged in Successfully"
         else:
             return None, "Invalid user or password."
     else:

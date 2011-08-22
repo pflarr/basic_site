@@ -30,6 +30,6 @@ def main(global_config, **settings):
     config.add_route('home', '/')
     config.add_view('basic_site.views.home',
                     route_name='home',
-                    renderer='templates/main.mako')
+                    renderer='basic_site:templates/main.mako')
     return config.make_wsgi_app()
 

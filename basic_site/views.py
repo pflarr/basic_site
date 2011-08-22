@@ -8,18 +8,28 @@ from pyramid.httpexceptions import HTTPFound
 from pyramid.security import forget
 from pyramid.url import route_url
 
+def get_context(request):
+    """Get the basic values all contexts should have, including
+info on the logged in user and a list of pages."""
+    context = get_context(request)
+
+    session = DBSession()
+    menu_pages = session.query(Page.id, Page.name)\
+                        .order_by(Page.name)\
+                        .all()
+    context['menu_pages'] = menu_pages
+    return context
+
 def home(request):
     dbsession = DBSession()
-  
-    uid, login_msg = login(request)
-    context = {'uid': uid, 
-               'login_msg': login_msg}
+ 
+    context = get_context(request)
    
     skip = request.matchdict.get('skip', 0)
  
     posts = dbsession.query(Post)\
                      .order_by(Post.created)\
-                     .skip(skip)\
+                     .offset(skip)\
                      .limit(5)\
                      .all()
 
@@ -32,9 +42,7 @@ def home(request):
 def post(request):
     session = DBSession()
 
-    uid, login_msg = login(request)
-    context = {'uid': uid, 
-               'login_msg': login_msg}
+    context = get_context(request)
    
     hist = request.matchdict.has_key('hist')
     id = request.matchdict['id']
@@ -55,9 +63,7 @@ def post(request):
 def page(request): 
     dbsession = DBSession()
 
-    uid, login_msg = login(request)
-    context = {'uid': uid, 
-               'login_msg': login_msg}
+    context = get_context(request)
     
     try:
         page = dbsession.query(Page)\
@@ -72,15 +78,13 @@ def page(request):
     return context
 
 def edit(request):
-    uid, login_msg = login(request)
-    context = {'uid': uid, 
-               'login_msg': login_msg}
+    context = get_context(request)
 
     ptype = request.matchdict['ptype']
     mode = request.matchdict['mode']
     id = request.matchdict.get('id')
 
-    context = {'ptype': ptype, 'mode': mode}
+    context.update({'ptype': ptype, 'mode': mode})
 
     if mode == 'add':
         return context
@@ -90,7 +94,7 @@ def edit(request):
     session = DBSession()
     
     tables = {('page', 'edit'): Page, ('page', 'revert'): Page_History,
-              ('post', 'edit'): Post, ('post', 'revert'): Post_History)}
+              ('post', 'edit'): Post, ('post', 'revert'): Post_History}
     table = tables[(ptype, mode)]
     
     q = session.query(table)
@@ -127,9 +131,7 @@ almost identical for pages and posts, so it's a unified view callable. It
 expects a 'ptypes' matchdict entry so that it can tell the difference 
 though. """
     session = DBSession()
-    uid, login_msg = login(request)
-    context = {'uid': uid, 
-               'login_msg': login_msg}
+    context = get_context(request)
 
     ptype = request.matchdict['ptype']
     if ptype == 'page':
@@ -178,7 +180,6 @@ though. """
 
         args.append(uid)
         entry.edit(*args)
-    except:
         context['message'] = '%s edited succesfully.' % ptype.capitalize()
     else:
         args = [uid] + args
@@ -200,9 +201,7 @@ though. """
 def delete(request):
     session = DBSession()
 
-    uid, login_msg = login(request)
-    context = {'uid': uid, 
-               'login_msg': login_msg}
+    context = get_context(request)
     
     ptype = request.matchdict['ptype']
     if ptype == 'post':
@@ -223,9 +222,7 @@ def delete(request):
 def history(request):
     session = DBSession()
 
-    uid, login_msg = login(request)
-    context = {'uid': uid, 
-               'login_msg': login_msg}
+    context = get_context(request)
 
     ptype = request.matchdict('ptype')
     name = request.matchdict('id')
@@ -258,10 +255,7 @@ def users(request):
 
     session = DBSession()
 
-    uid, login_msg = login(request)
-    context = {'uid': uid, 
-               'login_msg': login_msg,
-               'current_user': session.query(Users).get(uid) }
+    context = get_context(request)
 
     context['users'] = session.query(User).order_by(User.uid).all()
     return context
@@ -271,9 +265,7 @@ def mod_users(request):
     
     session = DBSession()
 
-    uid, login_msg = login(request)
-    context = {'uid': uid, 
-               'login_msg': login_msg}
+    context = get_context(request)
 
     action = request.matchdict['action']
 
@@ -291,7 +283,7 @@ def mod_users(request):
                     raise ValueError("Passwords do not match.")
                 user = User(n_uid, passwd, admin, fullname)
                 session.add(user)
-                message = "Added user %s" % user.uid)
+                message = "Added user %s" % user.uid
             except ValueError, msg:
                 message = str(msg)
     else: 
@@ -318,14 +310,10 @@ def mod_users(request):
 def change_pw(request):
     session = DBSession()
 
-    uid, login_msg = login(request)
-    context = {'uid': uid, 
-               'login_msg': login_msg}
-    
+    context = get_context(request)
 
     c_uid = request.matchdict['c_uid']
-    user = session.query(User).get(c_uid)
-    if user:
+    if user and c_uid == user.uid:  
         old = request.POST.getone('old')
         new = request.POST.getone('new')
         repeat = request.POST.getone('repeat')
@@ -347,3 +335,13 @@ def logout(request):
     headers = forget(request)
     return HTTPFound(location=request.route_url('home'), 
                      headers=reqeust.headers)
+
+def file(request):
+    session = DBSession()
+    response = request.response
+
+    file_id = request.matchdict['file_id']
+    file_info = session.query(File).get(file_id)
+    if not file_info:
+        raise NotFound("No such file: %s" % file_id)
+    
