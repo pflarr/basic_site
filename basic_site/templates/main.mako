@@ -1,12 +1,12 @@
 <%include file="head.mako" />
 
 <DIV id="main">
-% for item in news:
+% for post in posts:
   <DIV class="news">
-    ${item.content}
+    ${post.content}
     <DIV class="news_footer">
-      <SPAN class="creator">${item.creator|h}</SPAN>
-      <SPAN class="created">${item.created|h}</SPAN>
+      <SPAN class="creator">${post.creator|h}</SPAN>
+      <SPAN class="created">${post.created|h}</SPAN>
     </DIV>
   </DIV>
 % endfor

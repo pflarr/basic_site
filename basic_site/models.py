@@ -1,24 +1,35 @@
+import datetime
+
 from sqlalchemy import create_engine, Column, ForeignKey
-from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.ext.declarative import declarative_base
+import sqlalchemy.orm
+from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.types import String, DateTime, Integer, Boolean
+
+from pyramid.security import Allow, Everyone
+import transaction
 
 from zope.sqlalchemy import ZopeTransactionExtension
 
 from z3c.bcrypt import BcryptPasswordManager
 manager = BcryptPasswordManager()
 
-from pyramid.security import Allow, Everyone
-
-import sqlalchemy.orm
-
 DBSession = scoped_session(sessionmaker(extension=ZopeTransactionExtension()))
 Base = declarative_base()
 
+DEFAULT_ADMIN_PW = 'change_this!'
 def initialize_sql(engine):
     DBSession.configure(bind=engine)
     Base.metadata.bind = engine
     Base.metadata.create_all(engine)
+
+    session = DBSession()
+    admin = session.query(User).get('admin')
+    if not admin:
+        admin = User('admin', DEFAULT_ADMIN_PW, True, 'Admin')
+        session.add(admin)
+        session.flush()
+        transaction.commit()
 
 class RootFactory(object):
     __acl__ = [ (Allow, Everyone, 'view'),
@@ -28,7 +39,7 @@ class RootFactory(object):
         pass
 
 class User(Base):
-    __tablename__ = 'Users'
+    __tablename__ = 'users'
     uid = Column(String(10), primary_key=True)
     pw_hash = Column(String(), nullable=False)
     admin = Column(Boolean(), nullable=False)
@@ -49,12 +60,10 @@ class User(Base):
         return manager.checkPassword(self.pw_hash, passwd)
 
     def change_pw(self, new):
-        """Verifies the old pw before changing it to new. Returns True if
-    successful."""
-        self.pw_hash = manager.encodePassword(pw)
+        self.pw_hash = manager.encodePassword(new)
 
 class Post(Base):
-    __tablename__ = 'Post'
+    __tablename__ = 'posts'
     id = Column(Integer(), primary_key=True)
     created = Column(DateTime(), nullable=False)
     creator = Column(String(10), nullable=False)
@@ -113,7 +122,7 @@ class Post_History(Base):
         session.flush()
  
 class Page(Base):
-    __tablename__ = 'Page'
+    __tablename__ = 'pages'
     id = Column(Integer(), primary_key=True)
     name = Column(String(15), unique=True)
     created = Column(DateTime(), nullable=False)
@@ -170,3 +179,16 @@ class Page_History(Base):
             page = Page(user, self.name, self.contents, self.created)
             session.add(page)
         session.flush() 
+
+class File(Base):
+    __tablename__ = 'files';
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    submitter = Column(String, nullable=False)
+    changed = Column(DateTime, nullable=False)
+    size = Column(Integer)
+
+    def __init__(self, name, submitter):
+        self.name = name
+        self.submitter = submitter
+        self.changed = datetime.datetime.now()

@@ -31,5 +31,15 @@ def main(global_config, **settings):
     config.add_view('basic_site.views.home',
                     route_name='home',
                     renderer='basic_site:templates/main.mako')
+    config.add_route('users', '/users')
+    config.add_view('basic_site.views.users', route_name='users',
+                    renderer='basic_site:templates/users.mako')
+    config.add_route('file', '/file/{name}*rev')
+    config.add_view('basic_site.views.file', route_name='file')
+    config.add_route('files', '/files/')
+    config.add_view('basic_site.views.files', route_name='files',
+                    renderer='basic_site:templates/files.mako')
+    config.add_route('logout', '/logout/')
+    config.add_view('basic_site.views.logout', route_name='logout')
     return config.make_wsgi_app()
 
