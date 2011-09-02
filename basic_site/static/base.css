@@ -1,0 +1,57 @@
+div.head {
+    border: 1px solid blue;
+}
+
+div.login {
+    float: right;
+    font-size: small;
+}
+
+div.login input {
+    border: 1px black solid;
+    font-size: small;
+}
+
+div.login button {
+    border: 1px black solid;
+    font-size: small;
+}
+
+div.head div.message {
+    float: right;
+}
+
+div.pages {
+    float: left;
+    width: 200px;
+    height: 100%;
+    border: 1px solid black;
+}
+
+div.pages ul {
+    margin: 0px;
+    padding: 0px;
+}
+
+div.pages li {
+    border: 1px solid black;
+    list-style-type: none;
+    margin: 5px;
+}
+
+div.pages li.current {
+    background: #aaa;
+}
+
+div.main {
+    margin-top:1px;
+    border: 1px dashed green;
+}
+
+div.content {
+    position: relative;
+    left: 210px;
+    padding: 10px;
+    border: 1px solid red;
+}
+

@@ -1,9 +1,9 @@
 <%include file="head.mako" />
 
-<DIV id="main">
+<DIV class="content">
 
 % if user.admin:
-  <DIV id="add_user">
+  <DIV class="add_user">
     <H3>Add User:</H3>
     <FORM method="POST" action="${request.route_url('users')}">
       <LABEL for="uid">User Name:</LABEL>

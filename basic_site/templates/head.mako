@@ -4,9 +4,9 @@
     <LINK type="text/css" rel="stylesheet"
           href="${request.static_url('basic_site:static/base.css')}">
 </HEAD>
-<DIV id="head">
-    <IMG src="${request.route_url('file',name='logo.png',rev='')}">
-    <DIV id="login">
+<DIV class="head">
+    <IMG src="${request.route_url('file',name='logo.png')}">
+    <DIV class="login">
   % if user == None:
       <FORM action='' method="POST">
         <LABEL target="user">User</LABEL>
@@ -20,6 +20,10 @@
       (<A href="${request.route_url('logout')}">logout</A>)
   % endif
     </DIV>
+
+% if message:
+    <DIV class="message">${message|h}</DIV>
+% endif
 </DIV>
 
 <%
@@ -29,21 +33,21 @@
         else:
             return ''
 %>
-<DIV id=pages>
-  <UL>
-    <LI><A href="${request.route_url('home')}" ${cur_class('*Main')}>Main</A>
-  % if user:
-    <LI><A href="${request.route_url('users')}" 
-           ${cur_class('*Users')}>Users</A>
-    <LI><A href="${request.route_url('files')}"
-           ${cur_class('*Files')}>Files</A>
-  % endif
-  % for page in menu_pages:
-    <LI><A href="${request.route_url('page', id=page.id)}">grarg</A>
-  % endfor
-  </UL>
-</DIV>
+<DIV class=main>
+  <DIV class=pages>
+    <strong>Navigation:</strong>
+    <UL>
+      <LI ${cur_class('*Main')|n}>
+        <A href="${request.route_url('home')}">Main</A>
+    % if user:
+      <LI ${cur_class('*Users')|n}>
+        <A href="${request.route_url('users')}">Users</A>
+      <LI ${cur_class('*Files')|n}>
+        <A href="${request.route_url('files')}">Files</A>
+    % endif
+    % for page in menu_pages:
+      <LI><A href="${request.route_url('page', id=page.id)}">grarg</A>
+    % endfor
+    </UL>
 
-% if message:
-    <DIV class="message">${message|h}</DIV>
-% endif
+  </DIV>

@@ -1,6 +1,6 @@
 <%include file="head.mako" />
 
-<DIV id="main">
+<DIV id="content">
 % for post in posts:
   <DIV class="news">
     ${post.content}

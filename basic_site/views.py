@@ -2,6 +2,7 @@ from basic_site.models import DBSession, DEFAULT_ADMIN_PW
 from basic_site.models import Page, Post, File, User
 from basic_site.security import groupfinder, login
 
+import mimetypes
 import os
 
 from pyramid.httpexceptions import HTTPFound
@@ -10,6 +11,7 @@ from pyramid.security import forget
 from pyramid.url import route_url
 
 import sqlalchemy.orm
+from sqlalchemy.sql import expression
 import transaction
 
 def get_context(request):
@@ -353,19 +355,10 @@ def file(request):
     response = request.response
 
     name = request.matchdict['name']
-    rev_tuple = request.matchdict['rev']
-    try: 
-        if len(rev_tuple) == 1:
-            rev = int(rev_tuple[0])
-        elif len(rev_tuple) > 1:
-            raise ValueError
-        else:
-            rev = None
-    except ValueError:
-        raise NotFound("No such file.")
+    rev = request.matchdict.get('rev', None)
 
     q = session.query(File).filter(File.name==name)\
-                           .order_by(File.changed)\
+                           .order_by(expression.desc(File.changed))\
                            .limit(1)
     if rev:
         q = q.offset(rev)
@@ -383,7 +376,17 @@ def file(request):
     except:
         raise NotFound("No such file (though it should exist).")
 
+    
     response = request.response
+    mime_type, encoding = mimetypes.guess_type(file_info.name)
+    if 'get' in request.params or mime_type is None:
+        response.content_disposition = 'attachment; filename="%s"' % \
+                                        file_info.name
+                                                    
+    if mime_type:
+        response.content_type = mime_type
+    if encoding is not None:
+        response.content_encoding
     response.app_iter = file
     return response
 

@@ -1,6 +1,6 @@
 <%include file="head.mako" />
 
-<DIV id="main">
+<DIV id="content">
     ${page.content}
     <DIV class="page_footer">
       <SPAN class="creator">${page.creator|h}</SPAN>
