@@ -21,8 +21,10 @@
   % endif
     </DIV>
 
-% if message:
-    <DIV class="message">${message|h}</DIV>
+% if msg:
+  % for item in msg:
+    <DIV class="message">${item|h}</DIV>
+  % endfor
 % endif
 </DIV>
 

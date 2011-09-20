@@ -1,5 +1,6 @@
 from basic_site.models import DBSession, DEFAULT_ADMIN_PW
 from basic_site.models import Page, Post, File, User
+from basic_site.models import Page_History, Post_History
 from basic_site.security import groupfinder, login
 
 import mimetypes
@@ -30,7 +31,9 @@ info on the logged in user and a list of pages."""
                   DEFAULT_ADMIN_PW
     
     context['user'] = user
-    context['message'] = msg
+    context['msg'] = []
+    if msg:
+        context['msg'].append(msg)
 
     session = DBSession()
     menu_pages = session.query(Page.id, Page.name)\
@@ -99,35 +102,89 @@ def page(request):
 def edit(request):
     context = get_context(request)
 
+    for v in request.POST:
+        print v, request.POST[v]
+
     ptype = request.matchdict['ptype']
     mode = request.matchdict['mode']
     id = request.matchdict.get('id')
 
+    context['page_name'] = '%s %s' % (mode, ptype)
+    context['page_subtitle'] = ''
+
     context.update({'ptype': ptype, 'mode': mode})
 
     if mode == 'add':
-        return context
+        context['data'] = None
 
     context['id'] = id
-
-    session = DBSession()
     
-    tables = {('page', 'edit'): Page, ('page', 'revert'): Page_History,
-              ('post', 'edit'): Post, ('post', 'revert'): Post_History}
-    table = tables[(ptype, mode)]
+    if 'action' in request.POST:
+        action = request.POST.getone('action')
+    else:
+        action = None
+
+    if action is None and mode == 'add':
+        return context
+
+    if action == 'submit':
+        # Call the submit content view if we want to actually change something.
+        return submit_content(request)
+
+    if action is None:
+        # We aren't changing anything, just display the one we in intend
+        # to change.
+        session = DBSession()
+        tables = {('page', 'edit'): Page, ('page', 'revert'): Page_History,
+                  ('post', 'edit'): Post, ('post', 'revert'): Post_History}
+        table = tables[(ptype, mode)]
+         
+        q = session.query(table)
+
+        data = None
+        if mode == 'edit' and ptype == 'page': q = q.filter(table.name == id)
+        elif mode == 'edit': q = q.filter(table.id == id)
+        else: q= q.filter(table.hist_id == id)
+        try:
+            data = q.one()
+        except:
+            raise NotFound("No such %s to edit: %s" % (ptype, id))
+
+        context['data'] = data
+        context['preview'] = False
+
+    elif action == 'preview' and ptype == 'post':
+        if 'title' in request.POST:
+            title = request.POST.getone('title')
+        else:
+            title = ''
+            context['msg'].append("You might want to title your post.")
+        if 'content' in request.POST:
+            content = request.POST.getone('content')
+        else:
+            content = ''
+            context['msg'].append('No content given')
+        sticky = sticky in request.POST
+        context['data'] = Post(user.uid, title, content, sticky)
+        context['preview'] = True
+
+    elif action == 'preview' and ptype == 'page':
+        if 'name' in request.POST:
+            name = request.POST.getone('name')
+        else:
+            name = ''
+            context['msg'].append('You must give your page a name!')
+        if 'content' in request.POST:
+            content = request.POST.getone('content')
+        else:
+            content = ''
+            context['msg'].append('No content given')
+
+        context['data'] = Page(user.uid, name, content)
+        context['preview'] = True
     
-    q = session.query(table)
-
-    if mode == 'edit' and ptype == 'page': q = q.filter(table.name == id)
-    elif mode == 'edit': q = q.filter(table.id == id)
-    else: q= q.filter(table.hist_id == id)
-    try:
-        data = q.one()
-    except:
-        raise NotFound("No such %s to edit: %s" % (ptype, id))
-
-    context['data'] = data
-    return data
+    return context
+        
 
 def get_required_params(params, args=[], kwargs=[]):
     """Get the required parameters, and return an args and kwargs 
@@ -137,11 +194,11 @@ def get_required_params(params, args=[], kwargs=[]):
     for p in args:
         if p not in params:
             raise KeyError("Missing param: %s" % p)
-        out_args.append(params.getone())
+        out_args.append(params.getone(p))
     for p in kwargs:
         if p not in params:
             raise KeyError("Missing param: %s" % p)
-        out_kw[p] = params.getone()
+        out_kw[p] = params.getone(p)
     return out_args, out_kw
 
 def submit_content(request):
@@ -151,18 +208,19 @@ expects a 'ptypes' matchdict entry so that it can tell the difference
 though. """
     session = DBSession()
     context = get_context(request)
+    uid = context['user'].uid
 
     ptype = request.matchdict['ptype']
     if ptype == 'page':
         table = Page
         hist_table = Page_History
-        fields = ['title', 'content']
+        fields = ['name', 'content']
     else:
         table = Post
         hist_table = Post_History
-        fields = ['name', 'content']
+        fields = ['title', 'content']
     
-    args,_ = get_requested_params(request.params, fields) 
+    args,_ = get_required_params(request.params, fields) 
     if ptype == 'post':
         args.append( request.params.has_key('sticky') )
 
@@ -188,7 +246,7 @@ though. """
             session.query(hist_table)\
                    .filter(hist_table.id == id)\
                    .update({'id':entry.id})
-        context['message'] = '%s restored succesfully.' % ptype.capitalize()
+        msg = '%s restored succesfully.' % ptype.capitalize()
  
     elif 'id' in request.params:
         # Handle the editing of existing posts.
@@ -199,23 +257,16 @@ though. """
 
         args.append(uid)
         entry.edit(*args)
-        context['message'] = '%s edited succesfully.' % ptype.capitalize()
+        msg = '%s edited succesfully.' % ptype.capitalize()
     else:
         args = [uid] + args
         entry = table(*args)
         session.add(entry)
-        context['message'] = '%s added successfully.' % ptype.capitalize()
+        msg = '%s added successfully.' % ptype.capitalize()
         
     session.flush()
     if ptype == 'post':
-        context['page_name'] = 'View Post'
-        context['page_subtitle'] = ''
-        context['posts'] = [entry]
-    else:
-        context['page'] = entry
-        context['page_name'] = entry.name
-        context['page_subtitle'] = '- %s' % entry.name
-    return context
+        XXXreturn HTTPFound(location=request.route_url('post'
 
 def delete(request):
     session = DBSession()
@@ -235,7 +286,7 @@ def delete(request):
     hist = hist_table(entry)
     session.delete(entry)
 
-    context['message'] = "Deleted %s: %s" % (ptype, title) 
+    context['msg'].append("Deleted %s: %s" % (ptype, title))
     return context
 
 def history(request):
@@ -338,7 +389,7 @@ def users(request):
                 #transaction.commit()
 
     if message:
-        context['message'] = message
+        context['msg'].append(message)
     context['users'] = session.query(User).order_by(User.uid).all()
     context['page_name'] = '*Users'
     context['page_subtitle'] = 'Manage Users'
@@ -429,10 +480,10 @@ def files(request):
         if total_size > FILE_SIZE_LIMIT:
             # We limit the size of files, just in case.
             os.remove(path)
-            context['message'] = 'File is too large.'
+            context['msg'].append('File is too large.')
             transaction.abort()
         else:
-            context['message'] = 'File submitted successfully.'
+            context['msg'].append('File submitted successfully.')
             #transaction.commit()
        
 

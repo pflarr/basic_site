@@ -65,12 +65,13 @@ class User(Base):
 class Post(Base):
     __tablename__ = 'posts'
     id = Column(Integer(), primary_key=True)
+    title = Column(String(30), nullable=False)
     created = Column(DateTime(), nullable=False)
     creator = Column(String(10), nullable=False)
     sticky = Column(Boolean(), nullable=False)
-    contents = Column(String(), nullable=False)
+    content = Column(String(), nullable=False)
     
-    def __init__(self, creator, title, contents, sticky=False, created=None):
+    def __init__(self, creator, title, content, sticky=False, created=None):
         if created:
             self.created = created
         else:
@@ -78,7 +79,7 @@ class Post(Base):
         self.creator = creator
         self.sticky = sticky
         self.title = title[:30]
-        self.contents = contents
+        self.content = content
 
     def edit(self, title, content, sticky, user):
         """Edit this post, and record the change in the history."""
@@ -99,7 +100,7 @@ class Post_History(Base):
     creator = Column(String(10), nullable=False)
     sticky = Column(Boolean(), nullable=False)
     title = Column(String(30), nullable=False)
-    contents = Column(String(), nullable=False)
+    content = Column(String(), nullable=False)
 
     def __init__(self, editor_uid, post):
         for col in post.__table__.c:
@@ -117,7 +118,7 @@ class Post_History(Base):
             post.edit(user, self.title, self.content)
         except sqlalchemy.orm.exc.NoResultFound:
             # Recreate it if it doesn't still exist
-            post = Post(user, self.title, self.contents, self.created)
+            post = Post(user, self.title, self.content, self.created)
             session.add(page)
         session.flush()
  
@@ -127,10 +128,10 @@ class Page(Base):
     name = Column(String(15), unique=True)
     created = Column(DateTime(), nullable=False)
     creator = Column(String(10), nullable=False)
-    contents = Column(String(), nullable=False)
+    content = Column(String(), nullable=False)
 
     allowed_chars = ['abcdefghijklmnopqrstuvwxyz0123456789 _-'] 
-    def __init__(self, creator, name, contents, created=None):
+    def __init__(self, creator, name, content, created=None):
         if created:
             self.created = created
         else:
@@ -139,7 +140,7 @@ class Page(Base):
         self.name = ''.join([c if c.lower() in self.allowed_chars else '_'
                                for c in name[:15]])
         self.creator = creator
-        self.contents = contents
+        self.content = content
 
     def edit(self, name, content, user):
         """Edit this post, and record the change in the history."""
@@ -158,7 +159,7 @@ class Page_History(Base):
     changed_by = Column(String(10), ForeignKey(User.uid), nullable=False)
     created = Column(DateTime(), nullable=False)
     creator = Column(String(10), nullable=False)
-    contents = Column(String(), nullable=False)
+    content = Column(String(), nullable=False)
 
     def __init__(self, editor_uid, page):
         for col in page.__table__.c:
@@ -176,7 +177,7 @@ class Page_History(Base):
             page.edit(self.content, user)
         except sqlalchemy.orm.exc.NoResultFound:
             # Recreate it if it doesn't still exist
-            page = Page(user, self.name, self.contents, self.created)
+            page = Page(user, self.name, self.content, self.created)
             session.add(page)
         session.flush() 
 

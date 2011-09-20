@@ -1,34 +1,37 @@
 <%include file="head.mako" />
 
 <%
-if mode == 'edit_post':
-    content = post.content
-elif mode == 'edit_page':
-    content = page.content
+if mode == 'edit':
+    content = data.content
 else:
     content = ''
 %>
 
-<DIV id="main">
+<DIV id="content">
   <DIV id="instructions">
      
   </DIV>
 
-  <FORM action="${save_url}" method="post">
-  % if mode == 'new_post':
-    <INPUT name="title" type="text" size="30" maxlength="30">
-  % elif mode == 'edit_post':
-    <INPUT name="id" type="hidden" value="${post.name}">
-    <INPUT name="title" type="text" size="30" 
-           maxlength="30" value=${post.title}>
-  % elif mode == 'new_page':
-    <INPUT name="name" type="text" size="15" maxlength="15">
-  % elif mode == 'edit_page':
-    <INPUT name="old_name" type="hidden" value="${page.name}">
-    <INPUT name="name" type="text" size="15" maxlength="15">
+  <FORM action="${request.route_url('add',mode='add',ptype='post')}" 
+        method="post">
+  % if ptype == 'post':
+    <LABEL for="title">Post Title:</LABEL>
+    <INPUT name="title" type="text" size="30" maxlength="30"
+           value="${data.title if data else ''|h}"><BR/>
+  % elif ptype == 'page':
+    <LABEL for="name">Page Name:</LABEL>
+    <INPUT name="name" type="text" size="15" maxlength="15"
+           value="${data.name if data else ''}"><BR/>
   % endif
-    <TEXTAREA name="content" rows="50" cols="160">${content}</TEXTAREA>
+  % if (mode,ptype) == ('edit','page'):
+    <INPUT name="old_name" type="hidden" value="${data.name}">
+  % endif
+    <LABEL for="content">${ptype.capitalize()} content:</LABEL><BR/>
+    <TEXTAREA name="content" rows="20" cols="80">${content}</TEXTAREA>
     <INPUT name="mode" type="hidden" value="${mode}">
+    <INPUT name="ptype" type="hidden" value="${ptype}"><BR/>
+    <BUTTON type="submit" name="action" value="submit">Submit</BUTTON>
+    <BUTTON type="submit" name="action" value="preview">Preview</BUTTON>
   </FORM>
 </DIV>
 

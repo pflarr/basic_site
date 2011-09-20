@@ -27,21 +27,29 @@ def main(global_config, **settings):
                           authentication_policy=authn_policy,
                           authorization_policy=authz_policy)
     config.add_static_view('static', 'basic_site:static')
-    config.add_route('home', '/')
+    config.add_route('home', '')
     config.add_view('basic_site.views.home',
                     route_name='home',
                     renderer='basic_site:templates/main.mako')
-    config.add_route('users', '/users')
+    config.add_route('post','post/{id:\d+}')
+    XXXconfig.add_view('basic_site.views.post', 
+    config.add_route('add', '{mode:add}/{ptype:(page|post)}')
+    config.add_route('edit', '{mode:edit}/{ptype:(page|port)}/{id}')
+    config.add_view('basic_site.views.edit', route_name='add',
+                    renderer='basic_site:templates/edit.mako')
+    config.add_view('basic_site.views.edit', route_name='edit',
+                    renderer='basic_site:templates/edit.mako')
+    config.add_route('users', 'users')
     config.add_view('basic_site.views.users', route_name='users',
                     renderer='basic_site:templates/users.mako')
-    config.add_route('file_rev', '/file/{rev}/{name}')
-    config.add_route('file', '/file/{name}')
+    config.add_route('file_rev', 'file/{rev}/{name}')
+    config.add_route('file', 'file/{name}')
     config.add_view('basic_site.views.file', route_name='file')
     config.add_view('basic_site.views.file', route_name='file_rev')
-    config.add_route('files', '/files/')
+    config.add_route('files', 'files/')
     config.add_view('basic_site.views.files', route_name='files',
                     renderer='basic_site:templates/files.mako')
-    config.add_route('logout', '/logout/')
+    config.add_route('logout', 'logout/')
     config.add_view('basic_site.views.logout', route_name='logout')
     return config.make_wsgi_app()
 
