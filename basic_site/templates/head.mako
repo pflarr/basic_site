@@ -46,9 +46,13 @@
         <A href="${request.route_url('users')}">Users</A>
       <LI ${cur_class('*Files')|n}>
         <A href="${request.route_url('files')}">Files</A>
+      <LI ${cur_class('add page')|n}>
+        <A href="${request.route_url('add', mode='add', ptype='page')}"
+            >Add New Page</A>
     % endif
     % for page in menu_pages:
-      <LI><A href="${request.route_url('page', id=page.id)}">grarg</A>
+      <LI ${cur_class(page.name)|n}>
+        <A href="${request.route_url('page', name=page.name)}">${page.name}</A>
     % endfor
     </UL>
 

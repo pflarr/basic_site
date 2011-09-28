@@ -1,3 +1,6 @@
+from creole import Parser
+from creole.html_emitter import HtmlEmitter
+
 import datetime
 
 from sqlalchemy import create_engine, Column, ForeignKey
@@ -16,6 +19,9 @@ manager = BcryptPasswordManager()
 
 DBSession = scoped_session(sessionmaker(extension=ZopeTransactionExtension()))
 Base = declarative_base()
+
+class BS_Emitter(HtmlEmitter):
+    pass
 
 DEFAULT_ADMIN_PW = 'change_this!'
 def initialize_sql(engine):
@@ -90,6 +96,11 @@ class Post(Base):
         self.sticky = sticky
         session.add(hist)
 
+    def render(self):
+        doc = Parser(self.content).parse()
+        return BS_Emitter(doc).emit()
+        
+
 class Post_History(Base):
     __tablename__ = 'post_history'
     hist_id = Column(Integer(), primary_key=True)
@@ -130,7 +141,7 @@ class Page(Base):
     creator = Column(String(10), nullable=False)
     content = Column(String(), nullable=False)
 
-    allowed_chars = ['abcdefghijklmnopqrstuvwxyz0123456789 _-'] 
+    allowed_chars = 'abcdefghijklmnopqrstuvwxyz0123456789 _-'
     def __init__(self, creator, name, content, created=None):
         if created:
             self.created = created
@@ -149,6 +160,10 @@ class Page(Base):
         self.name = name
         self.content = content
         session.add(hist)
+    
+    def render(self):
+        doc = Parser(self.content).parse()
+        return BS_Emitter(doc).emit()
 
 class Page_History(Base):
     __tablename__ = 'page_history'

@@ -5,6 +5,7 @@ div.head {
 div.login {
     float: right;
     font-size: small;
+    margin-bottom: 6px;
 }
 
 div.login input {
@@ -19,6 +20,7 @@ div.login button {
 
 div.head div.message {
     float: right;
+    clear: right;
 }
 
 div.pages {

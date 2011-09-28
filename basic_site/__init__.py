@@ -32,9 +32,13 @@ def main(global_config, **settings):
                     route_name='home',
                     renderer='basic_site:templates/main.mako')
     config.add_route('post','post/{id:\d+}')
-    XXXconfig.add_view('basic_site.views.post', 
+    config.add_view('basic_site.views.post', route_name='post',
+                    renderer='basic_site:templates/post.mako')
+    config.add_route('page', 'page/{name}')
+    config.add_view('basic_site.views.page', route_name='page',
+                    renderer='basic_site:templates/page.mako')
     config.add_route('add', '{mode:add}/{ptype:(page|post)}')
-    config.add_route('edit', '{mode:edit}/{ptype:(page|port)}/{id}')
+    config.add_route('edit', '{mode:edit}/{ptype:(page|post)}/{id}')
     config.add_view('basic_site.views.edit', route_name='add',
                     renderer='basic_site:templates/edit.mako')
     config.add_view('basic_site.views.edit', route_name='edit',

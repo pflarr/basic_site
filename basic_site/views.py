@@ -79,7 +79,7 @@ def post(request):
     if not post:
         raise NotFound('No such post: %d' % id)
     
-    context['posts'] = [post]
+    context['post'] = post
     return context
 
 def page(request): 
@@ -89,7 +89,7 @@ def page(request):
     
     try:
         page = dbsession.query(Page)\
-                        .filter(Page.name == request.matchdict['page'])\
+                        .filter(Page.name == request.matchdict['name'])\
                         .one()
     except sqlalchemy.orm.exc.NoResultFound:
         return exception_response(404)
@@ -100,6 +100,7 @@ def page(request):
     return context
 
 def edit(request):
+    """ Handle the edit view and submission of pages and posts."""
     context = get_context(request)
 
     for v in request.POST:
@@ -164,8 +165,9 @@ def edit(request):
         else:
             content = ''
             context['msg'].append('No content given')
-        sticky = sticky in request.POST
-        context['data'] = Post(user.uid, title, content, sticky)
+        sticky = 'sticky' in request.POST
+        post = Post(context['user'].uid, title, content, sticky)
+        context['data'] = post
         context['preview'] = True
 
     elif action == 'preview' and ptype == 'page':
@@ -179,8 +181,9 @@ def edit(request):
         else:
             content = ''
             context['msg'].append('No content given')
-
-        context['data'] = Page(user.uid, name, content)
+        
+        page = Page(context['user'].uid, name, content)
+        context['data'] = page
         context['preview'] = True
     
     return context
@@ -266,7 +269,9 @@ though. """
         
     session.flush()
     if ptype == 'post':
-        XXXreturn HTTPFound(location=request.route_url('post'
+        return HTTPFound(location=request.route_url('post', id=entry.id))
+    elif ptype == 'page':
+        return HTTPFound(location=request.route_url('page', name=entry.name))
 
 def delete(request):
     session = DBSession()

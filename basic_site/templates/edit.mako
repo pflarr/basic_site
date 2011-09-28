@@ -7,12 +7,28 @@ else:
     content = ''
 %>
 
-<DIV id="content">
+<DIV class="content">
+  % if data:
+    <DIV class="post">
+    % if ptype=="post":
+      <H2 class="preview">Preview: ${data.title}</H2>
+    % elif ptype=="page":
+      <H2 class="preview">Preview: ${data.name}</H2>
+    % endif
+      ${data.render()|n}
+      <DIV class="post_footer">
+        <SPAN class="creator">${data.creator|h}</SPAN>
+        <SPAN class="created">${data.created|h}</SPAN>
+      </DIV>
+    </DIV>
+  % endif
   <DIV id="instructions">
      
   </DIV>
+    
+  <h1>${ptype}</h1>
 
-  <FORM action="${request.route_url('add',mode='add',ptype='post')}" 
+  <FORM action="${request.route_url(mode,mode=mode,ptype=ptype,id=id)}" 
         method="post">
   % if ptype == 'post':
     <LABEL for="title">Post Title:</LABEL>
@@ -27,6 +43,9 @@ else:
     <INPUT name="old_name" type="hidden" value="${data.name}">
   % endif
     <LABEL for="content">${ptype.capitalize()} content:</LABEL><BR/>
+  <%
+    content = data.content if data else '' 
+  %>
     <TEXTAREA name="content" rows="20" cols="80">${content}</TEXTAREA>
     <INPUT name="mode" type="hidden" value="${mode}">
     <INPUT name="ptype" type="hidden" value="${ptype}"><BR/>
