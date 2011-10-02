@@ -31,18 +31,21 @@ def main(global_config, **settings):
     config.add_view('basic_site.views.home',
                     route_name='home',
                     renderer='basic_site:templates/main.mako')
-    config.add_route('post','post/{id:\d+}')
+    config.add_route('post',r'post/{id:\d+(\.\d+)?}')
     config.add_view('basic_site.views.post', route_name='post',
                     renderer='basic_site:templates/post.mako')
-    config.add_route('page', 'page/{name}')
+    config.add_route('page',r'page/{name:[a-z0-9_ -]+(\.\d+)?}')
     config.add_view('basic_site.views.page', route_name='page',
                     renderer='basic_site:templates/page.mako')
-    config.add_route('add', '{mode:add}/{ptype:(page|post)}')
-    config.add_route('edit', '{mode:edit}/{ptype:(page|post)}/{id}')
+    config.add_route('add', 'add/{ptype:(page|post)}')
+    config.add_route('edit', 'edit/{ptype:(page|post)}/{id}')
     config.add_view('basic_site.views.edit', route_name='add',
                     renderer='basic_site:templates/edit.mako')
     config.add_view('basic_site.views.edit', route_name='edit',
                     renderer='basic_site:templates/edit.mako')
+    config.add_route('restore', 'restore/{ptype:(page|post)}/'
+                                '{id:[a-z0-9_ -]+)/{skip:\d+}')
+    config.add_view('basic_site.views.restore', route_name='restore')
     config.add_route('users', 'users')
     config.add_view('basic_site.views.users', route_name='users',
                     renderer='basic_site:templates/users.mako')

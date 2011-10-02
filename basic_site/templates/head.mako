@@ -3,6 +3,10 @@
     <TITLE>${request.registry.settings['site_name'] + page_subtitle|h}</TITLE>
     <LINK type="text/css" rel="stylesheet"
           href="${request.static_url('basic_site:static/base.css')}">
+    <LINK type="text/css" rel="stylesheet"
+          href="${request.route_url('file', name='theme.css')}">
+    <LINK type="text/css" rel="stylesheet"
+          href="${request.route_url('file', name='site.css')}">
 </HEAD>
 <DIV class="head">
     <IMG src="${request.route_url('file',name='logo.png')}">
@@ -21,12 +25,13 @@
   % endif
     </DIV>
 
+</DIV>
+
 % if msg:
   % for item in msg:
     <DIV class="message">${item|h}</DIV>
   % endfor
 % endif
-</DIV>
 
 <%
     def cur_class(this_page):
@@ -37,7 +42,6 @@
 %>
 <DIV class=main>
   <DIV class=pages>
-    <strong>Navigation:</strong>
     <UL>
       <LI ${cur_class('*Main')|n}>
         <A href="${request.route_url('home')}">Main</A>
@@ -47,7 +51,7 @@
       <LI ${cur_class('*Files')|n}>
         <A href="${request.route_url('files')}">Files</A>
       <LI ${cur_class('add page')|n}>
-        <A href="${request.route_url('add', mode='add', ptype='page')}"
+        <A href="${request.route_url('add', ptype='page')}"
             >Add New Page</A>
     % endif
     % for page in menu_pages:
@@ -57,3 +61,4 @@
     </UL>
 
   </DIV>
+  <DIV class="content">

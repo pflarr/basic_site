@@ -19,6 +19,7 @@ div.login button {
 }
 
 div.head div.message {
+    font-weight: bold;
     float: right;
     clear: right;
 }
@@ -51,9 +52,13 @@ div.main {
 }
 
 div.content {
-    position: relative;
-    left: 210px;
+    margin-left: 210px;
     padding: 10px;
     border: 1px solid red;
+}
+
+div.post {
+    margin-bottom: 5px;
+    border: 1px solid blue;
 }
 

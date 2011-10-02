@@ -6,7 +6,7 @@ from basic_site.security import groupfinder, login
 import mimetypes
 import os
 
-from pyramid.httpexceptions import HTTPFound
+from pyramid.httpexceptions import HTTPFound, exception_response
 from pyramid.exceptions import NotFound
 from pyramid.security import forget
 from pyramid.url import route_url
@@ -31,7 +31,8 @@ info on the logged in user and a list of pages."""
                   DEFAULT_ADMIN_PW
     
     context['user'] = user
-    context['msg'] = []
+    # Get any messages passed in the query
+    context['msg'] = [m for m in request.params.getall('msg')]
     if msg:
         context['msg'].append(msg)
 
@@ -66,19 +67,50 @@ def post(request):
 
     context = get_context(request)
    
-    hist = request.matchdict.has_key('hist')
     id = request.matchdict['id']
-    context['page_name'] = 'View Post'
-    context['page_subtitle'] = ''
+    if '.' in id:
+        id, skip = id.split('.', 1)
+    else:
+        skip = None
+    
+    try:
+        id = int(id)
+        if skip: skip = int(skip)
+    except ValueError:
+        raise except_response(404)
 
-    if hist:
-        post = session.query(Post_History).get(id)
+    if skip is not None:
+        try:
+            post = session.query(Post_History)\
+                          .filter(Post_History.id == id)\
+                          .order_by(expression.desc(Post_History.changed_on))\
+                          .limit(1)\
+                          .offset(skip)\
+                          .one()
+        except sqlalchemy.orm.exc.NoResultFound:
+            raise except_response(404)
+
+        context['page_name'] = 'View Post History'
+        context['page_subtitle'] = 'Post %d History, rev %d' % (id, skip+1)
     else:
         post = session.query(Post).get(id)
 
-    if not post:
-        raise NotFound('No such post: %d' % id)
+        if not post:    
+            raise NotFound('No such post: %d' % id)
     
+        context['page_name'] = 'View Post'
+        context['page_subtitle'] = 'Post %d' % id
+
+    hist_count = session.query(Post_History)\
+                        .filter(Post_History.id == id)\
+                        .count()
+    if skip is None and hist_count:
+        context['prior'] = 0
+    elif skip is not None and (skip+1) <= (hist_count-1):
+        context['prior'] = skip+1
+    else:
+        context['prior'] = None
+    context['next'] = context['next'] = skip - 1 if skip is not None else None
     context['post'] = post
     return context
 
@@ -87,16 +119,51 @@ def page(request):
 
     context = get_context(request)
     
+    name = request.matchdict['name']
+    is_hist = False
+    if '.' in name:
+        name, skip = name.split('.', 1)
+        is_hist = True
+        try:
+            skip = int(skip)
+        except ValueError:
+            raise except_response(404)
+        
     try:
         page = dbsession.query(Page)\
-                        .filter(Page.name == request.matchdict['name'])\
+                        .filter(Page.name == name)\
                         .one()
     except sqlalchemy.orm.exc.NoResultFound:
         return exception_response(404)
-   
-    context['page'] = page
-    context['page_name'] = page.name
-    context['page_subtitle'] = '- %s' % page.name
+
+    hist_count = dbsession.query(Page_History)\
+                          .filter(Page.id == page.id)\
+                          .count()
+
+    if is_hist:
+        try:
+            hist_page = dbsession.query(Page_History)\
+                                 .filter(Page_History.id == page.id)\
+                                 .order_by(Page_History.changed_on)\
+                                 .limit(1)\
+                                 .offset(skip)\
+                                 .one()
+        except sqlalchemy.orm.exc.NoResultFound:
+            return exception_response(404)
+        
+        context['page'] = hist_page
+        context['page_name'] = page.name
+        context['page_subtitle'] = '%s Revision - %d' % (page.name, skip + 1)
+        context['prior'] = skip + 1 if skip <= (hist_count - 2) else None
+        context['next'] = skip - 1
+        context['msg'].append('Hist count: %d' % hist_count)
+    else:
+        context['page'] = page
+        context['page_name'] = page.name
+        context['page_subtitle'] = '- %s' % page.name
+        context['prior'] = 0 if hist_count else None
+        context['next'] = None
+
     return context
 
 def edit(request):
@@ -107,7 +174,7 @@ def edit(request):
         print v, request.POST[v]
 
     ptype = request.matchdict['ptype']
-    mode = request.matchdict['mode']
+    mode = request.matched_route.name
     id = request.matchdict.get('id')
 
     context['page_name'] = '%s %s' % (mode, ptype)
@@ -143,8 +210,7 @@ def edit(request):
         q = session.query(table)
 
         data = None
-        if mode == 'edit' and ptype == 'page': q = q.filter(table.name == id)
-        elif mode == 'edit': q = q.filter(table.id == id)
+        if mode == 'edit': q = q.filter(table.id == id)
         else: q= q.filter(table.hist_id == id)
         try:
             data = q.one()
@@ -222,56 +288,82 @@ though. """
         table = Post
         hist_table = Post_History
         fields = ['title', 'content']
+
+    mode = request.matched_route.name
     
     args,_ = get_required_params(request.params, fields) 
     if ptype == 'post':
         args.append( request.params.has_key('sticky') )
 
-    if 'restore' in request.params:
-        id = request.params.getone('id')
-        hist_id = request.params.getone('restore')
-        entry = session.query(table).get(id)
-        if entry:
-            # The post still exists, just updated it.
-            args.append(uid)
-            entry.edit(*args)
-        else:
-            # The post was deleted, make a new one and update the history
-            # of the old one to point here.
-            hist = session.query(hist_table).get(hist_id)
-            if not hist:
-                raise NotFound("Failure restoring %s(hist_id): %d" % \
-                               (ptype, hist_id))
-            
-            args = [uid] + args + [hist.created]
-            entry = table(*args)
-            session.add(entry)
-            session.query(hist_table)\
-                   .filter(hist_table.id == id)\
-                   .update({'id':entry.id})
-        msg = '%s restored succesfully.' % ptype.capitalize()
- 
-    elif 'id' in request.params:
+
+    if mode == 'edit':
         # Handle the editing of existing posts.
-        id = request.params.getone()
-        entry = session.query(table).get()
+        id = request.matchdict['id']
+        entry = session.query(table).get(id)
         if not entry:
             raise NotFound("No such %s to edit: %d" % (ptype, id))
 
-        args.append(uid)
-        entry.edit(*args)
+        args = [uid] + args
+        hist = entry.edit(*args)
+        session.add(hist)
         msg = '%s edited succesfully.' % ptype.capitalize()
-    else:
+    elif mode == 'add':
         args = [uid] + args
         entry = table(*args)
         session.add(entry)
         msg = '%s added successfully.' % ptype.capitalize()
+    else:
+        msg = "Invalid mode: %s" % mode
         
     session.flush()
+    
+    context['msg'].append(msg)
+    msgs = [('msg', m) for m in context['msg']]
+
     if ptype == 'post':
-        return HTTPFound(location=request.route_url('post', id=entry.id))
+        return HTTPFound(location=request.route_url('post', id=entry.id,
+                                                    _query=msgs))
     elif ptype == 'page':
-        return HTTPFound(location=request.route_url('page', name=entry.name))
+        return HTTPFound(location=request.route_url('page', name=entry.name,
+                                                    _query=msgs))
+
+def restore(request):
+    session = DBSession()
+    context = get_context(request)
+    uid = context['user'].uid
+
+    ptype = request.matchdict['ptype']
+    if ptype == 'page':
+        table, hist_table = Page, Page_History
+    else:
+        table, hist_table = Post, Post_History
+        
+    id = request.matchdict['id']
+    skip = request.matchdickt['skip']
+
+    try:
+        entry = session.query(hist_table)\
+                       .filter(hist_table.id == id)\
+                       .order_by(expression.desc(hist_table.changed_on))\
+                       .limit(1)\
+                       .offset(skip)\
+                       .one()
+    except sqlalchemy.orm.exc.NoResultFound:
+        return exception_response(404)
+
+    current = session.query(table).get(id)
+    additions = entry.restore(context['user'], current)
+    session.addall(additions)
+
+    context['msg'].append('%s restored succesfully.' % ptype.capitalize())
+    msgs = [('msg', m) for m in context['msg']]
+    if ptype == 'post':
+        return HTTPFound(location=request.route_url('post', id=entry.id,
+                                                    _query=msgs))
+    elif ptype == 'page':
+        return HTTPFound(location=request.route_url('page', name=entry.name,
+                                                    _query=msgs))
+    return 
 
 def delete(request):
     session = DBSession()

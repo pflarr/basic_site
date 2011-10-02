@@ -1,21 +1,20 @@
 <%include file="head.mako" />
 
-<DIV class="content">
-
 % if user.admin:
   <DIV class="add_user">
     <H3>Add User:</H3>
-    <FORM method="POST" action="${request.route_url('users')}">
-      <LABEL for="uid">User Name:</LABEL>
-      <INPUT type="text" maxlength="10" size="10" name="uid">
-      <LABEL for="fullname">Full Name:</LABEL>
-      <INPUT type="text" size="30" name="fullname">
-      <LABEL for="passwd">Password:</LABEL>
+    <FORM method="POST" action="${request.route_url('users')}"
+          autocomplete="off">
+      <INPUT type="text" maxlength="10" size="20" name="uid">
+      <LABEL for="uid">User Name</LABEL><BR>
+      <INPUT type="text" size="20" name="fullname">
+      <LABEL for="fullname">Full Name</LABEL><BR>
       <INPUT type="password" size="20" name="passwd">
-      <LABEL for="repeat">Password (again):</LABEL>
+      <LABEL for="passwd">Password</LABEL><BR>
       <INPUT type="password" size="20" name="repeat">
-      <LABEL for="admin">Admin:</LABEL>
+      <LABEL for="repeat">Password (again)</LABEL><BR>
       <INPUT type="checkbox" name="admin"> 
+      <LABEL for="admin">Admin?</LABEL><BR>
       <BUTTON type="submit" name="action" value="add">Add User</BUTTON>
     </FORM>
   </DIV>
@@ -23,13 +22,14 @@
 
 <DIV id="change_pw">
   <H3>Change your password:</H3>
-  <FORM method="POST" action="${request.route_url('users')}">
-    <LABEL for="old">Current Password:</LABEL>
+  <FORM method="POST" action="${request.route_url('users')}"
+        autocomplete="off">
     <INPUT type="password" size="20" name="old">
-    <LABEL for="passwd">New Password:</LABEL>
+    <LABEL for="old">Current Password</LABEL><BR>
     <INPUT type="password" size="20" name="new">
-    <LABEL for="repeat">New Password (again):</LABEL>
+    <LABEL for="passwd">New Password</LABEL><BR>
     <INPUT type="password" size="20" name="repeat">
+    <LABEL for="repeat">New Password (again)</LABEL><BR>
     <BUTTON type="submit" name="action" 
             value="change_pw">Change Password</BUTTON>
   </FORM>
@@ -59,8 +59,6 @@
 % if user.admin:
   </FORM>
 % endif
-</DIV>
-
 </DIV>
 
 <%include file="foot.mako" />

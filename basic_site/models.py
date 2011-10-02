@@ -87,20 +87,23 @@ class Post(Base):
         self.title = title[:30]
         self.content = content
 
-    def edit(self, title, content, sticky, user):
-        """Edit this post, and record the change in the history."""
-        session = DBSession()
+    def edit(self, user, title, content, sticky, created=None):
+        """Edit this post, and return the history row (will need to be
+    added to a session.)"""
         hist = Post_History(user, self) 
         self.title = title[:30]
         self.content = content
         self.sticky = sticky
-        session.add(hist)
+        if created is None:
+           self.created = datetime.datetime.utcnow()
+        else:
+            self.created = created
+        return hist
 
     def render(self):
         doc = Parser(self.content).parse()
         return BS_Emitter(doc).emit()
         
-
 class Post_History(Base):
     __tablename__ = 'post_history'
     hist_id = Column(Integer(), primary_key=True)
@@ -114,24 +117,29 @@ class Post_History(Base):
     content = Column(String(), nullable=False)
 
     def __init__(self, editor_uid, post):
-        for col in post.__table__.c:
-            self.__table__[col] = post.__table__.c[col]
+        self.id = post.id
+        self.title = post.title
+        self.created = post.created
+        self.creator = post.creator
+        self.sticky = post.sticky
+        self.content = post.content
         self.changed_by = editor_uid
         self.changed_on = datetime.datetime.utcnow()
 
     def restore(self, user):
-        """Restore this history item's content."""
-        session = DBSession()
-        try:
-            post = session.query(Post)\
-                          .filter(Post.id == self.id)\
-                          .one()
-            post.edit(user, self.title, self.content)
-        except sqlalchemy.orm.exc.NoResultFound:
-            # Recreate it if it doesn't still exist
-            post = Post(user, self.title, self.content, self.created)
-            session.add(page)
-        session.flush()
+        """Restore this history item's content. Returns an item to add to
+    the db/session."""
+        if current:
+            return current.edit(user, self.title, self.content, self.sticky,
+                                created=self.created)
+        else:
+            return Post(user, self.title, self.content, self.sticky,
+                        self.created)
+    
+    def render(self):
+        doc = Parser(self.content).parse()
+        return BS_Emitter(doc).emit()
+
  
 class Page(Base):
     __tablename__ = 'pages'
@@ -153,14 +161,17 @@ class Page(Base):
         self.creator = creator
         self.content = content
 
-    def edit(self, name, content, user):
-        """Edit this post, and record the change in the history."""
-        session = DBSession()
+    def edit(self, user, name, content, created=None):
+        """Edit this page, and return the history table entry."""
         hist = Page_History(user, self) 
         self.name = name
         self.content = content
-        session.add(hist)
-    
+        if created:
+            self.created = datetime.datetime.utcnow()
+        else:
+            self.created = created
+        return hist
+
     def render(self):
         doc = Parser(self.content).parse()
         return BS_Emitter(doc).emit()
@@ -177,24 +188,26 @@ class Page_History(Base):
     content = Column(String(), nullable=False)
 
     def __init__(self, editor_uid, page):
-        for col in page.__table__.c:
-            self.__table__[col] = page.__table__.c[col]
+        self.id = page.id
+        self.name = page.name
+        self.created = page.created
+        self.creator = page.creator
+        self.content = page.content
         self.changed_by = editor_uid
         self.changed_on = datetime.datetime.utcnow()
 
-    def restore(self, user):
-        """Restore this history item's content."""
-        session = DBSession()
-        try:
-            page = session.query(Page)\
-                          .filter(Page.id == self.id)\
-                          .one()
-            page.edit(self.content, user)
-        except sqlalchemy.orm.exc.NoResultFound:
-            # Recreate it if it doesn't still exist
-            page = Page(user, self.name, self.content, self.created)
-            session.add(page)
-        session.flush() 
+    def restore(self, user, current):
+        """Restore this history item's content, returns a list of rows to
+    add to the session."""
+        
+        if current:
+            return current.edit(user, self.name, self.content, self.created)
+        else:
+            return Page(user, self.name, self.content, self.created)
+
+    def render(self):
+        doc = Parser(self.content).parse()
+        return BS_Emitter(doc).emit()
 
 class File(Base):
     __tablename__ = 'files';
@@ -208,3 +221,14 @@ class File(Base):
         self.name = name
         self.submitter = submitter
         self.changed = datetime.datetime.now()
+
+if __name__ == '__main__':
+    from sqlalchemy import engine_from_config
+    from ConfigParser import SafeConfigParser
+    import sys
+    p = SafeConfigParser()
+    assert p.read(sys.argv[1]), "Bad path to config (arg1): %s" % sys.argv[1]
+    
+    engine = engine_from_config(p._sections['app:basic_site'])
+    initialize_sql(engine)
+    engine = engine_from_config
