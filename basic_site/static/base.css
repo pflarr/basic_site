@@ -1,11 +1,18 @@
 div.head {
     border: 1px solid blue;
+    margin-bottom: 10px;
+    padding: 5px;
 }
 
 div.login {
     float: right;
+    clear: left;
     font-size: small;
     margin-bottom: 6px;
+}
+
+div.login form {
+    margin: 0px;
 }
 
 div.login input {
@@ -18,10 +25,12 @@ div.login button {
     font-size: small;
 }
 
-div.head div.message {
+div.message {
     font-weight: bold;
-    float: right;
-    clear: right;
+    border: 1px red solid;
+    background: white;
+    margin-bottom: 6px;
+    padding: 5px;
 }
 
 div.pages {
@@ -52,13 +61,27 @@ div.main {
 }
 
 div.content {
-    margin-left: 210px;
-    padding: 10px;
+    margin-left: 215px;
     border: 1px solid red;
+}
+
+div.content > div {
+    padding: 10px;
+    margin-bottom: 6px;
 }
 
 div.post {
     margin-bottom: 5px;
     border: 1px solid blue;
+}
+
+table {
+    border-collapse: collapse;
+}
+
+table td, table th {
+    padding: 3px;
+    padding-right: 6px;
+    padding-bottom: 1px;
 }
 

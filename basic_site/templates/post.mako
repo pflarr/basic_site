@@ -1,7 +1,7 @@
 <%include file="head.mako" />
 <% 
     route_url = request.route_url
-    edit_url = route_url('edit', ptype='post', id=post.id)
+    edit_url = route_url('edit', id=post.id)
     if prior is not None:
         prior_url = route_url('post', id='%s.%d' % (post.id, prior)) 
     if next >= 0:

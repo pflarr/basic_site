@@ -2,6 +2,7 @@ from creole import Parser
 from creole.html_emitter import HtmlEmitter
 
 import datetime
+import re
 
 from sqlalchemy import create_engine, Column, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
@@ -34,6 +35,12 @@ def initialize_sql(engine):
     if not admin:
         admin = User('admin', DEFAULT_ADMIN_PW, True, 'Admin')
         session.add(admin)
+
+        msg = "The default admin password is: '%s'. CHANGE IT! Until it "\
+              "is changed, anyone can log in as an admin." % DEFAULT_ADMIN_PW
+        post = Post('admin', 'Home', 'CHANGE THE DEFAULT PASSWORD!', msg,
+                    sticky=True) 
+        session.add(post)
         session.flush()
         transaction.commit()
 
@@ -69,19 +76,26 @@ class User(Base):
         self.pw_hash = manager.encodePassword(new)
 
 class Post(Base):
+    PAGE_RE_STR = r'[a-zA-Z0-9_ -]{1,30}'
+    PAGE_RE = re.compile('^%s$' % PAGE_RE_STR)
     __tablename__ = 'posts'
-    id = Column(Integer(), primary_key=True)
+    id = Column(Integer, primary_key=True)
+    page = Column(String(30))
     title = Column(String(30), nullable=False)
     created = Column(DateTime(), nullable=False)
     creator = Column(String(10), nullable=False)
     sticky = Column(Boolean(), nullable=False)
     content = Column(String(), nullable=False)
     
-    def __init__(self, creator, title, content, sticky=False, created=None):
+    def __init__(self, creator, page, title, content, 
+                       sticky=False, created=None):
         if created:
             self.created = created
         else:
             self.created = datetime.datetime.utcnow()
+        if not self.PAGE_RE.match(page):
+            raise ValueError("Invalid Page Name")
+        self.page = page
         self.creator = creator
         self.sticky = sticky
         self.title = title[:30]
@@ -107,6 +121,7 @@ class Post(Base):
 class Post_History(Base):
     __tablename__ = 'post_history'
     hist_id = Column(Integer(), primary_key=True)
+    page = Column(String(30), nullable=False)
     id = Column(Integer(), nullable=False)
     changed_on = Column(DateTime(), nullable=False)
     changed_by = Column(String(10), ForeignKey(User.uid), nullable=False)
@@ -126,7 +141,7 @@ class Post_History(Base):
         self.changed_by = editor_uid
         self.changed_on = datetime.datetime.utcnow()
 
-    def restore(self, user):
+    def restore(self, user, current):
         """Restore this history item's content. Returns an item to add to
     the db/session."""
         if current:
@@ -136,75 +151,6 @@ class Post_History(Base):
             return Post(user, self.title, self.content, self.sticky,
                         self.created)
     
-    def render(self):
-        doc = Parser(self.content).parse()
-        return BS_Emitter(doc).emit()
-
- 
-class Page(Base):
-    __tablename__ = 'pages'
-    id = Column(Integer(), primary_key=True)
-    name = Column(String(15), unique=True)
-    created = Column(DateTime(), nullable=False)
-    creator = Column(String(10), nullable=False)
-    content = Column(String(), nullable=False)
-
-    allowed_chars = 'abcdefghijklmnopqrstuvwxyz0123456789 _-'
-    def __init__(self, creator, name, content, created=None):
-        if created:
-            self.created = created
-        else:
-            self.created = datetime.datetime.utcnow()
-
-        self.name = ''.join([c if c.lower() in self.allowed_chars else '_'
-                               for c in name[:15]])
-        self.creator = creator
-        self.content = content
-
-    def edit(self, user, name, content, created=None):
-        """Edit this page, and return the history table entry."""
-        hist = Page_History(user, self) 
-        self.name = name
-        self.content = content
-        if created:
-            self.created = datetime.datetime.utcnow()
-        else:
-            self.created = created
-        return hist
-
-    def render(self):
-        doc = Parser(self.content).parse()
-        return BS_Emitter(doc).emit()
-
-class Page_History(Base):
-    __tablename__ = 'page_history'
-    hist_id = Column(Integer(), primary_key=True)
-    id = Column(Integer(), nullable=False)
-    name = Column(String(15), nullable=False)
-    changed_on = Column(DateTime(), nullable=False)
-    changed_by = Column(String(10), ForeignKey(User.uid), nullable=False)
-    created = Column(DateTime(), nullable=False)
-    creator = Column(String(10), nullable=False)
-    content = Column(String(), nullable=False)
-
-    def __init__(self, editor_uid, page):
-        self.id = page.id
-        self.name = page.name
-        self.created = page.created
-        self.creator = page.creator
-        self.content = page.content
-        self.changed_by = editor_uid
-        self.changed_on = datetime.datetime.utcnow()
-
-    def restore(self, user, current):
-        """Restore this history item's content, returns a list of rows to
-    add to the session."""
-        
-        if current:
-            return current.edit(user, self.name, self.content, self.created)
-        else:
-            return Page(user, self.name, self.content, self.created)
-
     def render(self):
         doc = Parser(self.content).parse()
         return BS_Emitter(doc).emit()

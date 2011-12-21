@@ -28,34 +28,46 @@ def main(global_config, **settings):
                           authorization_policy=authz_policy)
     config.add_static_view('static', 'basic_site:static')
     config.add_route('home', '')
-    config.add_view('basic_site.views.home',
-                    route_name='home',
+    config.add_view('basic_site.views.posts',
+                    route_name='home', permission='view',
                     renderer='basic_site:templates/main.mako')
+    config.add_route('posts', r'p/{page:[a-zA-Z0-9_ -]+}/{skip:\d*}')
+    config.add_view('basic_site.views.posts', route_name='posts',
+                     renderer='basic_site:templates/main.mako',
+                     permission='view')
     config.add_route('post',r'post/{id:\d+(\.\d+)?}')
     config.add_view('basic_site.views.post', route_name='post',
-                    renderer='basic_site:templates/post.mako')
-    config.add_route('page',r'page/{name:[a-z0-9_ -]+(\.\d+)?}')
-    config.add_view('basic_site.views.page', route_name='page',
-                    renderer='basic_site:templates/page.mako')
-    config.add_route('add', 'add/{ptype:(page|post)}')
-    config.add_route('edit', 'edit/{ptype:(page|post)}/{id}')
+                    renderer='basic_site:templates/post.mako',
+                    permission='view')
+    config.add_route('new_page', 'new_page')
+    config.add_view('basic_site.views.new_page', route_name='new_page',
+                    renderer='basic_site:templates/new_page.mako',
+                    permission='edit')
+    config.add_route('add', 'add/{page:[a-zA-Z0-9_ -]+}')
     config.add_view('basic_site.views.edit', route_name='add',
-                    renderer='basic_site:templates/edit.mako')
+                    renderer='basic_site:templates/edit.mako',
+                    permission='edit')
+    config.add_route('edit', 'edit/{id:\d+}')
     config.add_view('basic_site.views.edit', route_name='edit',
-                    renderer='basic_site:templates/edit.mako')
-    config.add_route('restore', 'restore/{ptype:(page|post)}/'
-                                '{id:[a-z0-9_ -]+)/{skip:\d+}')
-    config.add_view('basic_site.views.restore', route_name='restore')
+                    renderer='basic_site:templates/edit.mako',
+                    permission='edit')
+    config.add_route('restore', 'restore/{id:[a-z0-9_ -]+)/{version:\d+}')
+    config.add_view('basic_site.views.restore', route_name='restore',
+                    permission='edit')
     config.add_route('users', 'users')
     config.add_view('basic_site.views.users', route_name='users',
-                    renderer='basic_site:templates/users.mako')
+                    renderer='basic_site:templates/users.mako',
+                    permission='edit')
     config.add_route('file_rev', 'file/{rev}/{name}')
     config.add_route('file', 'file/{name}')
-    config.add_view('basic_site.views.file', route_name='file')
-    config.add_view('basic_site.views.file', route_name='file_rev')
+    config.add_view('basic_site.views.file', route_name='file',
+                    permission='view')
+    config.add_view('basic_site.views.file', route_name='file_rev',
+                    permission='view')
     config.add_route('files', 'files/')
     config.add_view('basic_site.views.files', route_name='files',
-                    renderer='basic_site:templates/files.mako')
+                    renderer='basic_site:templates/files.mako',
+                    permission='edit')
     config.add_route('logout', 'logout/')
     config.add_view('basic_site.views.logout', route_name='logout')
     return config.make_wsgi_app()

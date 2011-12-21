@@ -2,12 +2,12 @@
 
 
 % if user:
-<DIV><A href="${request.route_url('add', ptype='post')}"
+<DIV><A href="${request.route_url('add', page=page_name)}"
      >Add a new Post</A></DIV>
 % endif
 % for post in posts:
   <% 
-    edit_url = request.route_url('edit', ptype='post', id=post.id)
+    edit_url = request.route_url('edit', page=post.page, id=post.id)
   %> 
   <DIV class="post">
     <H2>${post.title}</H2>

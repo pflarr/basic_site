@@ -1,6 +1,5 @@
 from basic_site.models import DBSession, DEFAULT_ADMIN_PW
-from basic_site.models import Page, Post, File, User
-from basic_site.models import Page_History, Post_History
+from basic_site.models import Post, Post_History, File, User
 from basic_site.security import groupfinder, login
 
 import mimetypes
@@ -24,11 +23,6 @@ info on the logged in user and a list of pages."""
     if user is None and msg is None:
         session = DBSession()
         admin = session.query(User).get('admin')
-        if admin.check_pw(DEFAULT_ADMIN_PW):
-            user = admin
-            msg = "The default admin password is: '%s'. CHANGE IT! Until it "\
-                  "is changed, all visitors are automatically admin." % \
-                  DEFAULT_ADMIN_PW
     
     context['user'] = user
     # Get any messages passed in the query
@@ -37,27 +31,32 @@ info on the logged in user and a list of pages."""
         context['msg'].append(msg)
 
     session = DBSession()
-    menu_pages = session.query(Page.id, Page.name)\
-                        .order_by(Page.name)\
+    menu_pages = session.query(Post.page)\
+                        .filter(Post.page != 'Home')\
+                        .order_by(Post.page)\
+                        .group_by(Post.page)\
                         .all()
     context['menu_pages'] = menu_pages
     return context
 
-def home(request):
+def posts(request):
     dbsession = DBSession()
  
     context = get_context(request)
    
     skip = request.matchdict.get('skip', 0)
+    if skip == '': skip = 0
+    page = request.matchdict.get('page', 'Home')
  
     posts = dbsession.query(Post)\
+                     .filter(Post.page == page)\
                      .order_by(Post.created)\
                      .offset(skip)\
                      .limit(5)\
                      .all()
 
     context['posts'] = posts
-    context['page_name'] = '*Main'
+    context['page_name'] = page
     context['page_subtitle'] = ''
 
     return context
@@ -68,29 +67,31 @@ def post(request):
     context = get_context(request)
    
     id = request.matchdict['id']
+    page = request.matchdict['page']
     if '.' in id:
-        id, skip = id.split('.', 1)
+        id, version = id.split('.', 1)
     else:
-        skip = None
+        version = None
+
     
     try:
         id = int(id)
-        if skip: skip = int(skip)
+        if version: version = int(version)
     except ValueError:
         raise except_response(404)
 
-    if skip is not None:
+    if version is not None:
         try:
             post = session.query(Post_History)\
                           .filter(Post_History.id == id)\
+                          .filter(Post_History.page == page)\
                           .order_by(expression.desc(Post_History.changed_on))\
                           .limit(1)\
-                          .offset(skip)\
+                          .offset(version)\
                           .one()
         except sqlalchemy.orm.exc.NoResultFound:
             raise except_response(404)
 
-        context['page_name'] = 'View Post History'
         context['page_subtitle'] = 'Post %d History, rev %d' % (id, skip+1)
     else:
         post = session.query(Post).get(id)
@@ -98,129 +99,62 @@ def post(request):
         if not post:    
             raise NotFound('No such post: %d' % id)
     
-        context['page_name'] = 'View Post'
         context['page_subtitle'] = 'Post %d' % id
+
+    context['page_name'] = page
 
     hist_count = session.query(Post_History)\
                         .filter(Post_History.id == id)\
                         .count()
-    if skip is None and hist_count:
+    if version is None and hist_count:
         context['prior'] = 0
-    elif skip is not None and (skip+1) <= (hist_count-1):
-        context['prior'] = skip+1
+    elif version is not None and (version+1) <= (hist_count-1):
+        context['prior'] = version+1
     else:
         context['prior'] = None
-    context['next'] = context['next'] = skip - 1 if skip is not None else None
+
+    if version is not None:
+        context['next'] = context['next'] = version - 1 
+
     context['post'] = post
     return context
 
-def page(request): 
-    dbsession = DBSession()
 
-    context = get_context(request)
+def new_page(request):
+    """Presents a form where the user can enter a new page name. When submitted
+    with a page name, it redirects them to the add post form for that page."""
+    if 'page' in request.params:
+        page = request.params.getone('page')
+        return HTTPFound(location=request.route_url('add', page=page))
     
-    name = request.matchdict['name']
-    is_hist = False
-    if '.' in name:
-        name, skip = name.split('.', 1)
-        is_hist = True
-        try:
-            skip = int(skip)
-        except ValueError:
-            raise except_response(404)
-        
-    try:
-        page = dbsession.query(Page)\
-                        .filter(Page.name == name)\
-                        .one()
-    except sqlalchemy.orm.exc.NoResultFound:
-        return exception_response(404)
-
-    hist_count = dbsession.query(Page_History)\
-                          .filter(Page.id == page.id)\
-                          .count()
-
-    if is_hist:
-        try:
-            hist_page = dbsession.query(Page_History)\
-                                 .filter(Page_History.id == page.id)\
-                                 .order_by(Page_History.changed_on)\
-                                 .limit(1)\
-                                 .offset(skip)\
-                                 .one()
-        except sqlalchemy.orm.exc.NoResultFound:
-            return exception_response(404)
-        
-        context['page'] = hist_page
-        context['page_name'] = page.name
-        context['page_subtitle'] = '%s Revision - %d' % (page.name, skip + 1)
-        context['prior'] = skip + 1 if skip <= (hist_count - 2) else None
-        context['next'] = skip - 1
-        context['msg'].append('Hist count: %d' % hist_count)
-    else:
-        context['page'] = page
-        context['page_name'] = page.name
-        context['page_subtitle'] = '- %s' % page.name
-        context['prior'] = 0 if hist_count else None
-        context['next'] = None
-
+    context = get_context(request)
+    context['page_name'] = "*New Page"
+    context['page_subtitle'] = ""
     return context
 
 def edit(request):
-    """ Handle the edit view and submission of pages and posts."""
+    """Handle the edit view and submission of pages and posts."""
     context = get_context(request)
 
-    for v in request.POST:
-        print v, request.POST[v]
-
-    ptype = request.matchdict['ptype']
     mode = request.matched_route.name
-    id = request.matchdict.get('id')
+    id = request.matchdict.get('id', None)
+    page = request.matchdict.get('page', None)
 
-    context['page_name'] = '%s %s' % (mode, ptype)
+    context['page_name'] = '*%s' % mode
     context['page_subtitle'] = ''
 
-    context.update({'ptype': ptype, 'mode': mode})
-
-    if mode == 'add':
-        context['data'] = None
+    context.update({'mode': mode})
 
     context['id'] = id
-    
+    context['page'] = page
+    context['data'] = None
+
     if 'action' in request.POST:
         action = request.POST.getone('action')
     else:
         action = None
 
-    if action is None and mode == 'add':
-        return context
-
-    if action == 'submit':
-        # Call the submit content view if we want to actually change something.
-        return submit_content(request)
-
-    if action is None:
-        # We aren't changing anything, just display the one we in intend
-        # to change.
-        session = DBSession()
-        tables = {('page', 'edit'): Page, ('page', 'revert'): Page_History,
-                  ('post', 'edit'): Post, ('post', 'revert'): Post_History}
-        table = tables[(ptype, mode)]
-         
-        q = session.query(table)
-
-        data = None
-        if mode == 'edit': q = q.filter(table.id == id)
-        else: q= q.filter(table.hist_id == id)
-        try:
-            data = q.one()
-        except:
-            raise NotFound("No such %s to edit: %s" % (ptype, id))
-
-        context['data'] = data
-        context['preview'] = False
-
-    elif action == 'preview' and ptype == 'post':
+    if action == 'preview':
         if 'title' in request.POST:
             title = request.POST.getone('title')
         else:
@@ -232,29 +166,39 @@ def edit(request):
             content = ''
             context['msg'].append('No content given')
         sticky = 'sticky' in request.POST
-        post = Post(context['user'].uid, title, content, sticky)
+        post = Post(context['user'].uid, page, title, content, sticky)
         context['data'] = post
         context['preview'] = True
+    elif action == 'submit':
+        # Call the submit content view if we want to actually change something.
+        return submit_content(request)
 
-    elif action == 'preview' and ptype == 'page':
-        if 'name' in request.POST:
-            name = request.POST.getone('name')
+    if mode == 'edit' and action is None:
+        # We aren't changing anything, just display the one we in intend
+        # to change.
+        session = DBSession()
+        if mode == 'edit':
+            table = Post
         else:
-            name = ''
-            context['msg'].append('You must give your page a name!')
-        if 'content' in request.POST:
-            content = request.POST.getone('content')
-        else:
-            content = ''
-            context['msg'].append('No content given')
+            table = Post_History
+         
+        q = session.query(table)
+        q = q.filter(table.page == page)
+
+        data = None
+        if mode == 'edit': q = q.filter(table.id == id)
+        else: q= q.filter(table.hist_id == id)
         
-        page = Page(context['user'].uid, name, content)
-        context['data'] = page
-        context['preview'] = True
-    
+        try:
+            data = q.one()
+        except:
+            raise NotFound("No such post to edit: %s" % id)
+
+        context['data'] = data
+        context['preview'] = False
+
     return context
         
-
 def get_required_params(params, args=[], kwargs=[]):
     """Get the required parameters, and return an args and kwargs 
     dictionary."""
@@ -271,47 +215,32 @@ def get_required_params(params, args=[], kwargs=[]):
     return out_args, out_kw
 
 def submit_content(request):
-    """Handles page/post editing, adding, and restoration. The process is 
-almost identical for pages and posts, so it's a unified view callable. It 
-expects a 'ptypes' matchdict entry so that it can tell the difference 
-though. """
+    """Handles actually submitting new post content."""
     session = DBSession()
     context = get_context(request)
     uid = context['user'].uid
 
-    ptype = request.matchdict['ptype']
-    if ptype == 'page':
-        table = Page
-        hist_table = Page_History
-        fields = ['name', 'content']
-    else:
-        table = Post
-        hist_table = Post_History
-        fields = ['title', 'content']
-
     mode = request.matched_route.name
-    
-    args,_ = get_required_params(request.params, fields) 
-    if ptype == 'post':
-        args.append( request.params.has_key('sticky') )
-
+   
+    title = request.params.get('title')
+    content = request.params.get('content') 
+    sticky = request.params.has_key('sticky') 
+    page = request.matchdict['page']
 
     if mode == 'edit':
         # Handle the editing of existing posts.
         id = request.matchdict['id']
-        entry = session.query(table).get(id)
+        entry = session.query(Post).get(id)
         if not entry:
-            raise NotFound("No such %s to edit: %d" % (ptype, id))
+            raise NotFound("No such post to edit: %s, %d" % (page, id))
 
-        args = [uid] + args
-        hist = entry.edit(*args)
+        hist = entry.edit(uid, title, content, sticky)
         session.add(hist)
-        msg = '%s edited succesfully.' % ptype.capitalize()
+        msg = 'Post edited succesfully.'
     elif mode == 'add':
-        args = [uid] + args
-        entry = table(*args)
+        entry = Post(uid, page, title, content, sticky)
         session.add(entry)
-        msg = '%s added successfully.' % ptype.capitalize()
+        msg = 'Post added successfully.'
     else:
         msg = "Invalid mode: %s" % mode
         
@@ -320,70 +249,53 @@ though. """
     context['msg'].append(msg)
     msgs = [('msg', m) for m in context['msg']]
 
-    if ptype == 'post':
-        return HTTPFound(location=request.route_url('post', id=entry.id,
-                                                    _query=msgs))
-    elif ptype == 'page':
-        return HTTPFound(location=request.route_url('page', name=entry.name,
-                                                    _query=msgs))
+    return HTTPFound(location=request.route_url('post', id=entry.id,
+                                                page=page, _query=msgs))
 
 def restore(request):
+    """Restore a Post_History entry as the current version."""
     session = DBSession()
     context = get_context(request)
     uid = context['user'].uid
 
-    ptype = request.matchdict['ptype']
-    if ptype == 'page':
-        table, hist_table = Page, Page_History
-    else:
-        table, hist_table = Post, Post_History
-        
     id = request.matchdict['id']
-    skip = request.matchdickt['skip']
+    page = request.matchdict['page']
+    version = request.matchdickt['version']
 
     try:
-        entry = session.query(hist_table)\
-                       .filter(hist_table.id == id)\
-                       .order_by(expression.desc(hist_table.changed_on))\
+        entry = session.query(Post_History)\
+                       .filter(Post_History.id == id)\
+                       .filter(Post_History.page == page)\
+                       .order_by(expression.desc(Post_History.changed_on))\
                        .limit(1)\
-                       .offset(skip)\
+                       .offset(version)\
                        .one()
     except sqlalchemy.orm.exc.NoResultFound:
         return exception_response(404)
 
-    current = session.query(table).get(id)
+    current = session.query(Post).get(id)
     additions = entry.restore(context['user'], current)
     session.addall(additions)
 
-    context['msg'].append('%s restored succesfully.' % ptype.capitalize())
+    context['msg'].append('Post restored succesfully.')
     msgs = [('msg', m) for m in context['msg']]
-    if ptype == 'post':
-        return HTTPFound(location=request.route_url('post', id=entry.id,
-                                                    _query=msgs))
-    elif ptype == 'page':
-        return HTTPFound(location=request.route_url('page', name=entry.name,
-                                                    _query=msgs))
-    return 
+    return HTTPFound(location=request.route_url('post', id=entry.id, page=page,
+                                                _query=msgs))
 
 def delete(request):
     session = DBSession()
 
     context = get_context(request)
-    
-    ptype = request.matchdict['ptype']
-    if ptype == 'post':
-        table = Post
-        hist_table = Post_History
-    else:
-        table = Page
-        hist_table = Page_History
+   
+    id = request.matchdict['id']
+    page = request.matchdict['page'] 
+    post = session.query(Post).get(id)
+    title = post.title 
+    hist = Post_History(context['uid'], post)
+    session.delete(post)
+    session.add(hist)
 
-    entry = session.query(table).get(request.matchdict['id'])
-    title = entry.title if ptype == 'post' else entry.name
-    hist = hist_table(entry)
-    session.delete(entry)
-
-    context['msg'].append("Deleted %s: %s" % (ptype, title))
+    context['msg'].append("Deleted Post: %s" % title)
     return context
 
 def history(request):
@@ -391,23 +303,22 @@ def history(request):
 
     context = get_context(request)
 
-    ptype = request.matchdict('ptype')
-    name = request.matchdict('id')
+    id = request.matchdict('id')
+    page = request.matchdict('page')
+
+#XXX has a skip attribute that isn't used. Investigate.
     if 'skip' in request.params:
         skip = request.params.getone('skip')
     else:
         skip = 0
 
-    table = Page_History if ptype == 'page' else Post_History
-
-    q = session.query(table)\
-               .order_by(table.changed_on)
-    if name != '*' and ptype == 'page': q = q.filter(table.name == id)
-    if name != '*' and ptype == 'post': q = q.filter(table.name == id)
+    q = session.query(Post)\
+               .filter(Post.id == id)\
+               .filter(Post.page == page)\
+               .order_by(Post.changed_on)
 
     context['count'] = q.count()
     context['skip'] = skip
-    context['ptype'] = ptype
     context['id'] = id
 
     if skip:

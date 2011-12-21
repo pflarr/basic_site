@@ -7,7 +7,6 @@ from pyramid.url import route_url
 
 import sqlalchemy.orm
 
-
 def groupfinder(uid, request):
     """There are only two groups: 'editor' and 'admin'. The only difference
        is that only administrators can add users and edit certain files
@@ -15,11 +14,9 @@ def groupfinder(uid, request):
     if not uid:
         return None
     session = DBSession()
-    try:
-        user = session.query(User)\
-                      .filter(User.uid == uid)\
-                      .one()
-    except sqlalchemy.orm.exc.NoResultFound:
+    user = session.query(User).get(uid)
+
+    if not user:
         return None
     
     groups = ['group:editors']
